@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, InterWeights } from '../constants/theme';
+import { Colors, Radius, InterWeights } from '../constants/theme';
 
 interface CalendarPickerProps {
   selectedDate: Date;
