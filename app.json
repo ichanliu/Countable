@@ -45,7 +45,8 @@
           "photosPermission": "Allow Countdowns to access your photos to set custom event background images."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./plugins/withCountdownWidget/app.plugin.js"
     ],
     "extra": {
       "router": {},

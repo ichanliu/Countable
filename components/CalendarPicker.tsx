@@ -19,6 +19,14 @@ function getMonthDays(year: number, month: number): (number | null)[] {
   return cells;
 }
 
+function chunkWeeks(days: (number | null)[]): (number | null)[][] {
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+  return weeks;
+}
+
 export default function CalendarPicker({ selectedDate, onDateChange }: CalendarPickerProps) {
   const today = useMemo(() => {
     const d = new Date();
@@ -78,48 +86,50 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
       {/* Day-of-week labels */}
       <View style={styles.weekRow}>
         {DAYS.map((d) => (
-          <View key={d} style={styles.dayCell}>
+          <View key={d} style={styles.weekCell}>
             <Text style={styles.dayLabel}>{d}</Text>
           </View>
         ))}
       </View>
 
-      {/* Date grid */}
-      <View style={styles.grid}>
-        {days.map((d, i) => {
-          if (d === null) {
-            return <View key={`empty-${i}`} style={styles.dayCell} />;
-          }
+      {/* Date grid - each week is its own row */}
+      {chunkWeeks(days).map((week, wi) => (
+        <View key={wi} style={styles.weekRow}>
+          {week.map((d, ci) => {
+            if (d === null) {
+              return <View key={`e-${wi}-${ci}`} style={styles.dayCell} />;
+            }
 
-          const cellDate = new Date(viewYear, viewMonth, d);
-          cellDate.setHours(0, 0, 0, 0);
-          const isSelected =
-            cellDate.getTime() === selectedDate.getTime();
-          const isToday = cellDate.getTime() === today.getTime();
+            const cellDate = new Date(viewYear, viewMonth, d);
+            cellDate.setHours(0, 0, 0, 0);
+            const isSelected =
+              cellDate.getTime() === selectedDate.getTime();
+            const isToday = cellDate.getTime() === today.getTime();
 
-          return (
-            <Pressable
-              key={`day-${d}`}
-              style={[
-                styles.dayCell,
-                isSelected && styles.selectedDay,
-                isToday && !isSelected && styles.todayBorder,
-              ]}
-              onPress={() => onDateChange(cellDate)}
-            >
-              <Text
+            return (
+              <Pressable
+                key={`d-${d}`}
                 style={[
-                  styles.dayNumber,
-                  isSelected && styles.selectedDayText,
-                  isToday && !isSelected && styles.todayText,
+                  styles.dayCell,
+                  isSelected && styles.selectedDay,
+                  isToday && !isSelected && styles.todayBorder,
                 ]}
+                onPress={() => onDateChange(cellDate)}
               >
-                {d}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <Text
+                  style={[
+                    styles.dayNumber,
+                    isSelected && styles.selectedDayText,
+                    isToday && !isSelected && styles.todayText,
+                  ]}
+                >
+                  {d}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
 
       {/* Jump to Today button */}
       <Pressable style={styles.jumpBtn} onPress={jumpToToday}>
@@ -151,22 +161,23 @@ const styles = StyleSheet.create({
   weekRow: {
     flexDirection: 'row',
   },
+  weekCell: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
   dayLabel: {
     fontSize: 12,
     fontFamily: InterWeights.semiBold,
     color: Colors.mutedForeground,
     textAlign: 'center',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
   dayCell: {
     flex: 1,
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 0,
+    maxWidth: '14.28%',
   },
   dayNumber: {
     fontSize: 15,
