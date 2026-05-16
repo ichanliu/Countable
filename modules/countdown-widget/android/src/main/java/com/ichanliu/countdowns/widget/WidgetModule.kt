@@ -1,4 +1,4 @@
-package com.ichanliu.countdowns
+package com.ichanliu.countdowns.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName

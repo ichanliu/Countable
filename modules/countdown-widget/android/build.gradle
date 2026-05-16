@@ -2,7 +2,7 @@ apply plugin: "com.android.library"
 apply plugin: "org.jetbrains.kotlin.android"
 
 android {
-  namespace = "com.ichanliu.countdowns"
+  namespace = "com.ichanliu.countdowns.widget"
   compileSdk = 36
 
   defaultConfig {

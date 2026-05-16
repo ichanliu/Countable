@@ -1,4 +1,4 @@
-package com.ichanliu.countdowns
+package com.ichanliu.countdowns.widget
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
