@@ -1,14 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
-  TextInput,
   StyleSheet,
   Alert,
   Image,
-  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -22,7 +20,6 @@ import { useSettings } from '../context/SettingsContext';
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, addImage, removeImage } = useSettings();
-  const [reminderText, setReminderText] = useState(settings.reminderMessage);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -44,11 +41,6 @@ export default function SettingsScreen() {
       await addImage(result.assets[0].uri);
     }
   }, [addImage]);
-
-  const handleSaveReminder = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    updateSettings({ reminderMessage: reminderText });
-  }, [reminderText, updateSettings]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -117,38 +109,6 @@ export default function SettingsScreen() {
             <Ionicons name="image-outline" size={20} color={Colors.primary} />
             <Text style={styles.addImageText}>Add Image</Text>
           </Pressable>
-        </View>
-
-        {/* Notification Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>REMINDER</Text>
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Daily at 00:00</Text>
-            <Switch
-              value={settings.reminderEnabled}
-              onValueChange={(v) => updateSettings({ reminderEnabled: v })}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
-            />
-          </View>
-          {settings.reminderEnabled && (
-            <>
-              <Text style={styles.reminderHint}>
-                Available variables:{'\n'}{'{title}'} - event name{'\n'}{'{days}'} - number of days{'\n'}{'{type}'} - "LEFT" or "PASSED"
-              </Text>
-              <TextInput
-                style={styles.reminderInput}
-                value={reminderText}
-                onChangeText={setReminderText}
-                placeholder="Today is {title} - {days} days {type}!"
-                placeholderTextColor={Colors.mutedForeground}
-                multiline
-              />
-              <Pressable style={styles.saveReminderBtn} onPress={handleSaveReminder}>
-                <Text style={styles.saveReminderText}>Save Reminder Text</Text>
-              </Pressable>
-            </>
-          )}
         </View>
 
         {/* Info */}
@@ -239,43 +199,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: InterWeights.medium,
     color: Colors.primary,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  switchLabel: {
-    fontSize: 15,
-    fontFamily: InterWeights.medium,
-    color: Colors.foreground,
-  },
-  reminderHint: {
-    fontSize: 12,
-    fontFamily: InterWeights.regular,
-    color: Colors.mutedForeground,
-    lineHeight: 18,
-  },
-  reminderInput: {
-    fontSize: 14,
-    fontFamily: InterWeights.regular,
-    color: Colors.foreground,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.badge,
-    padding: 12,
-    minHeight: 60,
-  },
-  saveReminderBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.pill,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  saveReminderText: {
-    fontSize: 14,
-    fontFamily: InterWeights.semiBold,
-    color: '#fff',
   },
   infoText: {
     fontSize: 14,

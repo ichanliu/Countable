@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.widget.RemoteViews
 
 class CountdownWidget : AppWidgetProvider() {
@@ -63,11 +64,15 @@ class CountdownWidget : AppWidgetProvider() {
                 views.setTextColor(R.id.widget_label, Color.parseColor("#7A8A9E"))
             }
 
-            // Click handler - open app
-            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            intent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            if (eventId?.isNotEmpty() == true) {
-                intent?.putExtra("eventId", eventId)
+            // Click handler - open app with deep link to event detail
+            val deepLink = if (eventId?.isNotEmpty() == true) {
+                "countdowns://event-detail?eventId=$eventId"
+            } else {
+                "countdowns://"
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse(deepLink)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             val pendingIntent = PendingIntent.getActivity(
                 context,

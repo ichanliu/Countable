@@ -3,6 +3,7 @@ export interface CountdownEvent {
   title: string;
   targetDate: string;
   imageUri?: string;
+  bgImageUri?: string;
   isPinned: boolean;
   createdAt: string;
 }

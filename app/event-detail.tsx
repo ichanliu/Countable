@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ImageBackground,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -26,6 +27,9 @@ export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { events, updateEvent } = useEvents();
   const event = events.find((e) => e.id === eventId);
+  const { height: screenHeight } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView>(null);
+  const pageHeight = screenHeight - insets.top;
 
   const [showCreatedPicker, setShowCreatedPicker] = useState(false);
   const [showTargetPicker, setShowTargetPicker] = useState(false);
@@ -100,15 +104,15 @@ export default function EventDetailScreen() {
       // Copy to persistent storage
       const filename = `event_img_${Date.now()}.jpg`;
       const dest = FileSystem.documentDirectory + filename;
-      if (event.imageUri) {
-        try { await FileSystem.deleteAsync(event.imageUri, { idempotent: true }); } catch {}
+      if (event.bgImageUri) {
+        try { await FileSystem.deleteAsync(event.bgImageUri, { idempotent: true }); } catch {}
       }
       let finalUri = pickedUri;
       try {
         await FileSystem.copyAsync({ from: pickedUri, to: dest });
         finalUri = dest;
       } catch {}
-      await updateEvent(event.id, { imageUri: finalUri });
+      await updateEvent(event.id, { bgImageUri: finalUri });
     }
   }, [event, updateEvent]);
 
@@ -138,14 +142,18 @@ export default function EventDetailScreen() {
       </Pressable>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
+        pagingEnabled
         showsVerticalScrollIndicator={false}
+        snapToAlignment="start"
+        decelerationRate="fast"
       >
-        {/* Hero section - with background */}
-        <View style={[styles.heroWrap, { paddingTop: insets.top + 80 }]}>
-          {event.imageUri ? (
+        {/* Page 1: Hero section */}
+        <View style={{ height: pageHeight }}>
+          {event.bgImageUri ? (
             <ImageBackground
-              source={{ uri: event.imageUri }}
+              source={{ uri: event.bgImageUri }}
               style={StyleSheet.absoluteFill}
               resizeMode="cover"
             >
@@ -161,7 +169,7 @@ export default function EventDetailScreen() {
               style={StyleSheet.absoluteFill}
             />
           )}
-          <View style={styles.heroContent}>
+          <View style={[styles.heroContent, { flex: 1 }]}>
             <Text style={[styles.heroNumber, { color: dayColor }]}>
               {dayType === 'today' ? '🎉' : absDiff}
             </Text>
@@ -172,16 +180,14 @@ export default function EventDetailScreen() {
           </View>
         </View>
 
-        {/* Bottom section - dark background */}
-        <View style={styles.bottomSection}>
+        {/* Page 2: Bottom section */}
+        <View style={[styles.bottomSection, { minHeight: pageHeight }]}>
           {/* Progress ring (future/today only) */}
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
-              <ProgressRing
-                progress={ringProgress}
-                color={dayColor}
-                size={160}
-              />
+              <View style={styles.progressBarWrap}>
+                <View style={[styles.progressBarFill, { width: `${Math.round(ringProgress * 100)}%`, backgroundColor: dayColor }]} />
+              </View>
               <View style={styles.ringCenter}>
                 <Text style={[styles.ringPercent, { color: dayColor }]}>
                   {Math.round(ringProgress * 100)}%
@@ -246,62 +252,6 @@ export default function EventDetailScreen() {
   );
 }
 
-// Pure View-based circular progress ring (no SVG dependency)
-function ProgressRing({ progress, color, size = 160 }: { progress: number; color: string; size?: number }) {
-  const half = size / 2;
-  const stroke = 10;
-  const pct = Math.min(Math.max(progress, 0), 1);
-  const angle = pct * 360;
-
-  // Right half covers 0° → 180°, left half covers 180° → 360°
-  const rightAngle = Math.min(angle, 180);
-  const leftAngle = Math.max(angle - 180, 0);
-
-  return (
-    <View style={{ width: size, height: size }}>
-      {/* Gray background ring */}
-      <View style={[StyleSheet.absoluteFill, {
-        borderRadius: half,
-        borderWidth: stroke,
-        borderColor: 'rgba(255,255,255,0.1)',
-      }]} />
-
-      {/* Full assembly rotated -90deg so 0 starts at top */}
-      <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: '-90deg' }] }]}>
-        {/* Right half clip */}
-        <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', left: half }]}>
-          <View style={{
-            position: 'absolute',
-            left: -half,
-            width: size,
-            height: size,
-            borderRadius: half,
-            borderWidth: stroke,
-            borderColor: color,
-            transform: [{ rotate: `${rightAngle}deg` }],
-          }} />
-        </View>
-
-        {/* Left half clip (only needed when > 50%) */}
-        {pct > 0.5 && (
-          <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', right: half }]}>
-            <View style={{
-              position: 'absolute',
-              right: -half,
-              width: size,
-              height: size,
-              borderRadius: half,
-              borderWidth: stroke,
-              borderColor: color,
-              transform: [{ rotate: `${leftAngle}deg` }],
-            }} />
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -330,11 +280,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  heroWrap: {
-    minHeight: 380,
-    justifyContent: 'center',
-    paddingBottom: 40,
   },
   heroContent: {
     alignItems: 'center',
@@ -374,11 +319,21 @@ const styles = StyleSheet.create({
   },
   ringContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 8,
+    gap: 12,
+  },
+  progressBarWrap: {
+    width: '100%',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 3,
   },
   ringCenter: {
-    position: 'absolute',
     alignItems: 'center',
   },
   ringPercent: {
