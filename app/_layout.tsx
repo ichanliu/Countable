@@ -63,13 +63,6 @@ export default function RootLayout() {
                 animation: 'slide_from_bottom',
               }}
             />
-            <Stack.Screen
-              name="widget-guide"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
           </Stack>
         </EventsProvider>
       </SafeAreaProvider>

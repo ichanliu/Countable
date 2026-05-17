@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,9 @@ import EventCard from '../components/EventCard';
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { events, loading, togglePin, reorderEvents } = useEvents();
+  const sortedEvents = useMemo(() => {
+    return [...events].sort((a, b) => Number(b.isPinned) - Number(a.isPinned));
+  }, [events]);
   const [isArrangeMode, setIsArrangeMode] = useState(false);
   const safeTop = Platform.OS === 'web' ? 67 : insets.top;
   const safeBottom = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -47,30 +50,26 @@ export default function HomeScreen() {
   const handleMoveUp = useCallback(
     (index: number) => {
       if (index <= 0) return;
-      const newOrder = [...events];
-      const temp = newOrder[index];
-      newOrder[index] = newOrder[index - 1];
-      newOrder[index - 1] = temp;
-      reorderEvents(newOrder);
+      const sorted = [...sortedEvents];
+      const temp = sorted[index];
+      sorted[index] = sorted[index - 1];
+      sorted[index - 1] = temp;
+      reorderEvents(sorted);
     },
-    [events, reorderEvents]
+    [sortedEvents, reorderEvents]
   );
 
   const handleMoveDown = useCallback(
     (index: number) => {
-      if (index >= events.length - 1) return;
-      const newOrder = [...events];
-      const temp = newOrder[index];
-      newOrder[index] = newOrder[index + 1];
-      newOrder[index + 1] = temp;
-      reorderEvents(newOrder);
+      if (index >= sortedEvents.length - 1) return;
+      const sorted = [...sortedEvents];
+      const temp = sorted[index];
+      sorted[index] = sorted[index + 1];
+      sorted[index + 1] = temp;
+      reorderEvents(sorted);
     },
-    [events, reorderEvents]
+    [sortedEvents, reorderEvents]
   );
-
-  const goToWidgetGuide = () => {
-    router.push('/widget-guide');
-  };
 
   const renderItem = useCallback(
     ({ item, index }: { item: CountdownEvent; index: number }) => (
@@ -105,7 +104,7 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Countdowns</Text>
+          <Text style={styles.headerTitle}>Countable</Text>
           <Text style={styles.headerSubtitle}>
             {events.length} event{events.length !== 1 ? 's' : ''}
           </Text>
@@ -132,9 +131,6 @@ export default function HomeScreen() {
               )}
             </Pressable>
           )}
-          <Pressable onPress={goToWidgetGuide} style={styles.widgetGuideBtn}>
-            <Ionicons name="phone-portrait-outline" size={22} color={Colors.foreground} />
-          </Pressable>
         </View>
       </View>
 
@@ -151,7 +147,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
-          data={events}
+          data={sortedEvents}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={{
@@ -228,9 +224,6 @@ const styles = StyleSheet.create({
   },
   arrangeBtnTextActive: {
     color: '#fff',
-  },
-  widgetGuideBtn: {
-    padding: 6,
   },
   fab: {
     position: 'absolute',

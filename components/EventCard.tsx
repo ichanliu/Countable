@@ -118,7 +118,7 @@ export default function EventCard({
       <View style={styles.topRow}>
         {event.isPinned && (
           <View style={styles.pinnedBadge}>
-            <Ionicons name="bookmark" size={11} color={Colors.pinnedGold} />
+            <Ionicons name="star" size={11} color={Colors.pinnedGold} />
             <Text style={styles.pinnedText}>PINNED</Text>
           </View>
         )}
@@ -129,7 +129,7 @@ export default function EventCard({
             </Pressable>
             <Pressable onPress={handlePin} hitSlop={8} style={styles.iconBtn}>
               <Ionicons
-                name="bookmark"
+                name={event.isPinned ? 'star' : 'star-outline'}
                 size={18}
                 color={event.isPinned ? Colors.pinnedGold : 'rgba(255,255,255,0.7)'}
               />

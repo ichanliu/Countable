@@ -69,20 +69,17 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   }, [events, save]);
 
   const deleteEvent = useCallback(async (id: string) => {
-    const wasPinned = events.find((e) => e.id === id)?.isPinned ?? false;
     const newEvents = events.filter((e) => e.id !== id);
     setEvents(newEvents);
     await save(newEvents);
-    if (wasPinned) syncWidget(null);
+    const pinned = newEvents.find((e) => e.isPinned);
+    syncWidget(pinned || null);
   }, [events, save]);
 
   const togglePin = useCallback(async (id: string) => {
-    const newEvents = events.map((e) => {
-      if (e.id === id) {
-        return { ...e, isPinned: !e.isPinned };
-      }
-      return { ...e, isPinned: false };
-    });
+    const newEvents = events.map((e) =>
+      e.id === id ? { ...e, isPinned: !e.isPinned } : e
+    );
     setEvents(newEvents);
     await save(newEvents);
     const pinned = newEvents.find((e) => e.isPinned);
