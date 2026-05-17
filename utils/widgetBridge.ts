@@ -16,6 +16,7 @@ export function syncWidget(event: CountdownEvent | null): void {
         count: '--',
         label: 'PIN AN EVENT',
         color: '#7A8A9E',
+        bgImage: '',
       });
       return;
     }
@@ -52,6 +53,7 @@ export function syncWidget(event: CountdownEvent | null): void {
       label,
       color,
       eventId: event.id,
+      bgImage: event.widgetImageUri || event.imageUri || '',
     });
   } catch (error) {
     console.warn('Widget sync failed:', error);

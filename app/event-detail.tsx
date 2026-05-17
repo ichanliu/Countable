@@ -29,7 +29,7 @@ export default function EventDetailScreen() {
   const event = events.find((e) => e.id === eventId);
   const { height: screenHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
-  const pageHeight = screenHeight - insets.top;
+  const pageHeight = screenHeight;
 
   const [showCreatedPicker, setShowCreatedPicker] = useState(false);
   const [showTargetPicker, setShowTargetPicker] = useState(false);
@@ -116,6 +116,34 @@ export default function EventDetailScreen() {
     }
   }, [event, updateEvent]);
 
+  const handlePickWidgetImage = useCallback(async () => {
+    if (!event) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission required', 'Allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const pickedUri = result.assets[0].uri;
+      const filename = `widget_img_${Date.now()}.jpg`;
+      const dest = FileSystem.documentDirectory + filename;
+      if (event.widgetImageUri) {
+        try { await FileSystem.deleteAsync(event.widgetImageUri, { idempotent: true }); } catch {}
+      }
+      let finalUri = pickedUri;
+      try {
+        await FileSystem.copyAsync({ from: pickedUri, to: dest });
+        finalUri = dest;
+      } catch {}
+      await updateEvent(event.id, { widgetImageUri: finalUri });
+    }
+  }, [event, updateEvent]);
+
   if (!event) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -150,7 +178,7 @@ export default function EventDetailScreen() {
         decelerationRate="fast"
       >
         {/* Page 1: Hero section */}
-        <View style={{ height: pageHeight }}>
+        <View style={{ height: pageHeight, justifyContent: 'center' }}>
           {event.bgImageUri ? (
             <ImageBackground
               source={{ uri: event.bgImageUri }}
@@ -158,8 +186,8 @@ export default function EventDetailScreen() {
               resizeMode="cover"
             >
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
-                locations={[0, 0.4, 0.7]}
+                colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.5)']}
+                locations={[0, 0.5, 0.85]}
                 style={StyleSheet.absoluteFill}
               />
             </ImageBackground>
@@ -169,7 +197,7 @@ export default function EventDetailScreen() {
               style={StyleSheet.absoluteFill}
             />
           )}
-          <View style={[styles.heroContent, { flex: 1 }]}>
+          <View style={styles.heroContent}>
             <Text style={[styles.heroNumber, { color: dayColor }]}>
               {dayType === 'today' ? '🎉' : absDiff}
             </Text>
@@ -181,8 +209,9 @@ export default function EventDetailScreen() {
         </View>
 
         {/* Page 2: Bottom section */}
-        <View style={[styles.bottomSection, { minHeight: pageHeight }]}>
-          {/* Progress ring (future/today only) */}
+        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 40 }]}>
+          {/* Spacer */}
+          <View style={{ height: 20 }} />
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
               <View style={styles.progressBarWrap}>
@@ -206,6 +235,18 @@ export default function EventDetailScreen() {
             <Pressable style={styles.editActionBtn} onPress={handlePickImage}>
               <Ionicons name={event.imageUri ? "swap-horizontal" : "add"} size={16} color={Colors.primary} />
               <Text style={styles.editActionText}>{event.imageUri ? 'Change' : 'Add Image'}</Text>
+            </Pressable>
+          </View>
+
+          {/* Widget image edit */}
+          <View style={styles.editSection}>
+            <View style={styles.editRow}>
+              <Ionicons name="phone-portrait-outline" size={18} color={Colors.mutedForeground} />
+              <Text style={styles.editLabel}>Widget Background</Text>
+            </View>
+            <Pressable style={styles.editActionBtn} onPress={handlePickWidgetImage}>
+              <Ionicons name={event.widgetImageUri ? "swap-horizontal" : "add"} size={16} color={Colors.primary} />
+              <Text style={styles.editActionText}>{event.widgetImageUri ? 'Change' : 'Add Image'}</Text>
             </Pressable>
           </View>
 

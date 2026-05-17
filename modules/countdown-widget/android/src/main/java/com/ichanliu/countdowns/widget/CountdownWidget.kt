@@ -32,6 +32,7 @@ class CountdownWidget : AppWidgetProvider() {
         const val KEY_LABEL = "event_label"
         const val KEY_COLOR = "event_color"
         const val KEY_EVENT_ID = "event_id"
+        const val KEY_BG_IMAGE = "event_bg_image"
 
         fun updateAppWidget(
             context: Context,
@@ -46,6 +47,19 @@ class CountdownWidget : AppWidgetProvider() {
             val label = prefs.getString(KEY_LABEL, null)
             val colorStr = prefs.getString(KEY_COLOR, "#5B9EFF")
             val eventId = prefs.getString(KEY_EVENT_ID, "")
+            val bgImage = prefs.getString(KEY_BG_IMAGE, "")
+
+            // Background image
+            if (bgImage?.isNotEmpty() == true) {
+                try {
+                    views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
+                    views.setImageViewUri(R.id.widget_bg_image, Uri.parse(bgImage))
+                } catch (_: Exception) {
+                    views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
+                }
+            } else {
+                views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
+            }
 
             if (title != null) {
                 views.setTextViewText(R.id.widget_title, title)

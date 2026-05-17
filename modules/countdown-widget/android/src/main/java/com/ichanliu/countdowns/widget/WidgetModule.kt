@@ -25,6 +25,7 @@ class WidgetModule(reactContext: ReactApplicationContext) :
         val label = data.getString("label") ?: "PIN AN EVENT"
         val color = data.getString("color") ?: "#5B9EFF"
         val eventId = data.getString("eventId") ?: ""
+        val bgImage = data.getString("bgImage") ?: ""
 
         val prefs = context.getSharedPreferences(CountdownWidget.PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
@@ -33,6 +34,7 @@ class WidgetModule(reactContext: ReactApplicationContext) :
             .putString(CountdownWidget.KEY_LABEL, label)
             .putString(CountdownWidget.KEY_COLOR, color)
             .putString(CountdownWidget.KEY_EVENT_ID, eventId)
+            .putString(CountdownWidget.KEY_BG_IMAGE, bgImage)
             .apply()
 
         val componentName = ComponentName(context, CountdownWidget::class.java)

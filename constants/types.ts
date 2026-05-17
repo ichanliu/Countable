@@ -4,6 +4,7 @@ export interface CountdownEvent {
   targetDate: string;
   imageUri?: string;
   bgImageUri?: string;
+  widgetImageUri?: string;
   isPinned: boolean;
   createdAt: string;
 }
