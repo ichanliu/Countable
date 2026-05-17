@@ -35,6 +35,7 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
   }, []);
   const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(selectedDate.getMonth());
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
   const days = useMemo(() => getMonthDays(viewYear, viewMonth), [viewYear, viewMonth]);
 
@@ -42,6 +43,15 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
     month: 'long',
     year: 'numeric',
   });
+
+  // Generate years around the current view year
+  const yearRange = useMemo(() => {
+    const start = viewYear - 8;
+    const end = viewYear + 7;
+    const years: number[] = [];
+    for (let y = start; y <= end; y++) years.push(y);
+    return years;
+  }, [viewYear]);
 
   const goToPrev = () => {
     if (viewMonth === 0) {
@@ -65,6 +75,7 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
     const now = new Date();
     setViewYear(now.getFullYear());
     setViewMonth(now.getMonth());
+    setShowYearPicker(false);
     onDateChange(now);
   };
 
@@ -72,18 +83,41 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={goToPrev} hitSlop={8} style={styles.arrowBtn}>
-          <Ionicons name="chevron-back" size={20} color={Colors.foreground} />
+        <Pressable onPress={showYearPicker ? undefined : goToPrev} hitSlop={8} style={styles.arrowBtn}>
+          {!showYearPicker && <Ionicons name="chevron-back" size={20} color={Colors.foreground} />}
         </Pressable>
-        <Pressable onPress={jumpToToday} hitSlop={8}>
-          <Text style={styles.monthTitle}>{monthName}</Text>
+        <Pressable onPress={() => setShowYearPicker(!showYearPicker)} hitSlop={8}>
+          <Text style={styles.monthTitle}>{showYearPicker ? 'Select Year' : monthName}</Text>
         </Pressable>
-        <Pressable onPress={goToNext} hitSlop={8} style={styles.arrowBtn}>
-          <Ionicons name="chevron-forward" size={20} color={Colors.foreground} />
+        <Pressable onPress={showYearPicker ? undefined : goToNext} hitSlop={8} style={styles.arrowBtn}>
+          {!showYearPicker && <Ionicons name="chevron-forward" size={20} color={Colors.foreground} />}
         </Pressable>
       </View>
 
-      {/* Day-of-week labels */}
+      {/* Year picker grid */}
+      {showYearPicker ? (
+        <View style={styles.yearGrid}>
+          {yearRange.map((year) => {
+            const isSelected = year === viewYear;
+            return (
+              <Pressable
+                key={year}
+                style={[styles.yearCell, isSelected && styles.selectedYearCell]}
+                onPress={() => {
+                  setViewYear(year);
+                  setShowYearPicker(false);
+                }}
+              >
+                <Text style={[styles.yearText, isSelected && styles.selectedYearText]}>
+                  {year}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <>
+          {/* Day-of-week labels */}
       <View style={styles.weekRow}>
         {DAYS.map((d) => (
           <View key={d} style={styles.weekCell}>
@@ -130,6 +164,9 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
           })}
         </View>
       ))}
+
+        </>
+      )}
 
       {/* Jump to Today button */}
       <Pressable style={styles.jumpBtn} onPress={jumpToToday}>
@@ -215,5 +252,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: InterWeights.semiBold,
     color: Colors.primary,
+  },
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 8,
+  },
+  yearCell: {
+    width: '25%',
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  selectedYearCell: {
+    backgroundColor: Colors.primary,
+  },
+  yearText: {
+    fontSize: 15,
+    fontFamily: InterWeights.medium,
+    color: Colors.foreground,
+  },
+  selectedYearText: {
+    color: '#fff',
+    fontFamily: InterWeights.bold,
   },
 });

@@ -40,6 +40,14 @@ export default function HomeScreen() {
     router.push(`/add-event?eventId=${eventId}`);
   }, []);
 
+  const handleEventPress = useCallback((eventId: string) => {
+    router.push(`/event-detail?eventId=${eventId}`);
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    router.push('/settings');
+  }, []);
+
   const handlePinEvent = useCallback(
     (eventId: string) => {
       togglePin(eventId);
@@ -78,13 +86,14 @@ export default function HomeScreen() {
         isArrangeMode={isArrangeMode}
         isFirst={index === 0}
         isLast={index === events.length - 1}
+        onPress={() => handleEventPress(item.id)}
         onEdit={() => handleEditEvent(item.id)}
         onPin={() => handlePinEvent(item.id)}
         onMoveUp={() => handleMoveUp(index)}
         onMoveDown={() => handleMoveDown(index)}
       />
     ),
-    [isArrangeMode, events.length, handleEditEvent, handlePinEvent, handleMoveUp, handleMoveDown]
+    [isArrangeMode, events.length, handleEventPress, handleEditEvent, handlePinEvent, handleMoveUp, handleMoveDown]
   );
 
   const keyExtractor = useCallback((item: CountdownEvent) => item.id, []);
@@ -131,6 +140,9 @@ export default function HomeScreen() {
               )}
             </Pressable>
           )}
+          <Pressable onPress={handleOpenSettings} style={styles.settingsBtn}>
+            <Ionicons name="settings-outline" size={22} color={Colors.foreground} />
+          </Pressable>
         </View>
       </View>
 
@@ -224,6 +236,9 @@ const styles = StyleSheet.create({
   },
   arrangeBtnTextActive: {
     color: '#fff',
+  },
+  settingsBtn: {
+    padding: 6,
   },
   fab: {
     position: 'absolute',

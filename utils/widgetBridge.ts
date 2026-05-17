@@ -51,6 +51,7 @@ export function syncWidget(event: CountdownEvent | null): void {
       count,
       label,
       color,
+      eventId: event.id,
     });
   } catch (error) {
     console.warn('Widget sync failed:', error);

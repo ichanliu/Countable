@@ -28,6 +28,7 @@ interface EventCardProps {
   isArrangeMode: boolean;
   isFirst: boolean;
   isLast: boolean;
+  onPress: () => void;
   onEdit: () => void;
   onPin: () => void;
   onMoveUp: () => void;
@@ -41,6 +42,7 @@ export default function EventCard({
   isArrangeMode,
   isFirst,
   isLast,
+  onPress,
   onEdit,
   onPin,
   onMoveUp,
@@ -102,6 +104,13 @@ export default function EventCard({
   const handleMoveDown = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onMoveDown();
+  };
+
+  const handlePress = () => {
+    if (!isArrangeMode) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
   };
 
   const renderCardContent = () => (
@@ -224,6 +233,7 @@ export default function EventCard({
   return (
     <AnimatedPressable
       style={[styles.cardContainer, animatedStyle, { height: CARD_HEIGHT }]}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
     >

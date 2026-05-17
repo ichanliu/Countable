@@ -1,8 +1,10 @@
 package com.ichanliu.countdowns.widget
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.widget.RemoteViews
 
@@ -28,6 +30,7 @@ class CountdownWidget : AppWidgetProvider() {
         const val KEY_COUNT = "event_count"
         const val KEY_LABEL = "event_label"
         const val KEY_COLOR = "event_color"
+        const val KEY_EVENT_ID = "event_id"
 
         fun updateAppWidget(
             context: Context,
@@ -41,6 +44,7 @@ class CountdownWidget : AppWidgetProvider() {
             val count = prefs.getString(KEY_COUNT, null)
             val label = prefs.getString(KEY_LABEL, null)
             val colorStr = prefs.getString(KEY_COLOR, "#5B9EFF")
+            val eventId = prefs.getString(KEY_EVENT_ID, "")
 
             if (title != null) {
                 views.setTextViewText(R.id.widget_title, title)
@@ -58,6 +62,20 @@ class CountdownWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_label, "PIN AN EVENT")
                 views.setTextColor(R.id.widget_label, Color.parseColor("#7A8A9E"))
             }
+
+            // Click handler - open app
+            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            intent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            if (eventId?.isNotEmpty() == true) {
+                intent?.putExtra("eventId", eventId)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                appWidgetId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

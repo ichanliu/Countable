@@ -14,6 +14,7 @@ import {
 import { View, StyleSheet } from 'react-native';
 import { Colors } from '../constants/theme';
 import { EventsProvider } from '../context/EventsContext';
+import { SettingsProvider } from '../context/SettingsContext';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -46,7 +47,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <EventsProvider>
+        <SettingsProvider>
+          <EventsProvider>
           <StatusBar style="light" />
           <Stack
             screenOptions={{
@@ -63,8 +65,22 @@ export default function RootLayout() {
                 animation: 'slide_from_bottom',
               }}
             />
+            <Stack.Screen
+              name="event-detail"
+              options={{
+                animation: 'slide_from_right',
+              }}
+            />
+            <Stack.Screen
+              name="settings"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
           </Stack>
         </EventsProvider>
+        </SettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
