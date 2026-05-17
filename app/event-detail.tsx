@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -178,30 +177,11 @@ export default function EventDetailScreen() {
           {/* Progress ring (future/today only) */}
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
-              <Svg width={160} height={160} viewBox="0 0 160 160">
-                {/* Background ring */}
-                <Circle
-                  cx={80}
-                  cy={80}
-                  r={68}
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeWidth={10}
-                  fill="none"
-                />
-                {/* Progress arc */}
-                <Circle
-                  cx={80}
-                  cy={80}
-                  r={68}
-                  stroke={dayColor}
-                  strokeWidth={10}
-                  fill="none"
-                  strokeDasharray={2 * Math.PI * 68}
-                  strokeDashoffset={2 * Math.PI * 68 * (1 - ringProgress)}
-                  strokeLinecap="round"
-                  transform={`rotate(-90, 80, 80)`}
-                />
-              </Svg>
+              <ProgressRing
+                progress={ringProgress}
+                color={dayColor}
+                size={160}
+              />
               <View style={styles.ringCenter}>
                 <Text style={[styles.ringPercent, { color: dayColor }]}>
                   {Math.round(ringProgress * 100)}%
@@ -262,6 +242,62 @@ export default function EventDetailScreen() {
           </View>
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+// Pure View-based circular progress ring (no SVG dependency)
+function ProgressRing({ progress, color, size = 160 }: { progress: number; color: string; size?: number }) {
+  const half = size / 2;
+  const stroke = 10;
+  const pct = Math.min(Math.max(progress, 0), 1);
+  const angle = pct * 360;
+
+  // Right half covers 0° → 180°, left half covers 180° → 360°
+  const rightAngle = Math.min(angle, 180);
+  const leftAngle = Math.max(angle - 180, 0);
+
+  return (
+    <View style={{ width: size, height: size }}>
+      {/* Gray background ring */}
+      <View style={[StyleSheet.absoluteFill, {
+        borderRadius: half,
+        borderWidth: stroke,
+        borderColor: 'rgba(255,255,255,0.1)',
+      }]} />
+
+      {/* Full assembly rotated -90deg so 0 starts at top */}
+      <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: '-90deg' }] }]}>
+        {/* Right half clip */}
+        <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', left: half }]}>
+          <View style={{
+            position: 'absolute',
+            left: -half,
+            width: size,
+            height: size,
+            borderRadius: half,
+            borderWidth: stroke,
+            borderColor: color,
+            transform: [{ rotate: `${rightAngle}deg` }],
+          }} />
+        </View>
+
+        {/* Left half clip (only needed when > 50%) */}
+        {pct > 0.5 && (
+          <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', right: half }]}>
+            <View style={{
+              position: 'absolute',
+              right: -half,
+              width: size,
+              height: size,
+              borderRadius: half,
+              borderWidth: stroke,
+              borderColor: color,
+              transform: [{ rotate: `${leftAngle}deg` }],
+            }} />
+          </View>
+        )}
+      </View>
     </View>
   );
 }
