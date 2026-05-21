@@ -14,6 +14,8 @@ interface EventsContextType {
   deleteEvent: (id: string) => Promise<void>;
   togglePin: (id: string) => Promise<void>;
   reorderEvents: (newOrder: CountdownEvent[]) => Promise<void>;
+  exportEvents: () => Promise<string>;
+  importEvents: (json: string) => Promise<number>;
 }
 
 const EventsContext = createContext<EventsContextType | null>(null);
@@ -91,6 +93,39 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     await save(newOrder);
   }, [save]);
 
+  const exportEvents = useCallback(async (): Promise<string> => {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      events: events.map(({ id, title, targetDate, imageUri, bgImageUri, widgetImageUri, isPinned, createdAt }) => ({
+        id, title, targetDate, imageUri, bgImageUri, widgetImageUri, isPinned, createdAt,
+      })),
+    };
+    return JSON.stringify(data, null, 2);
+  }, [events]);
+
+  const importEvents = useCallback(async (json: string): Promise<number> => {
+    const data = JSON.parse(json);
+    if (!data || !Array.isArray(data.events)) {
+      throw new Error('Invalid backup file format');
+    }
+    const imported: CountdownEvent[] = data.events.map((e: any) => ({
+      id: e.id,
+      title: e.title || 'Untitled',
+      targetDate: e.targetDate || new Date().toISOString(),
+      imageUri: e.imageUri || undefined,
+      bgImageUri: e.bgImageUri || undefined,
+      widgetImageUri: e.widgetImageUri || undefined,
+      isPinned: !!e.isPinned,
+      createdAt: e.createdAt || new Date().toISOString(),
+    }));
+    setEvents(imported);
+    await save(imported);
+    const pinned = imported.find((e) => e.isPinned);
+    syncWidget(pinned || null);
+    return imported.length;
+  }, [save]);
+
   const pinnedEvent = events.find((e) => e.isPinned) || null;
 
   return (
@@ -104,6 +139,8 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         deleteEvent,
         togglePin,
         reorderEvents,
+        exportEvents,
+        importEvents,
       }}
     >
       {children}

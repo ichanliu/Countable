@@ -7,19 +7,25 @@ import {
   StyleSheet,
   Alert,
   Image,
+  Share,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useSettings } from '../context/SettingsContext';
+import { useEvents } from '../context/EventsContext';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, addImage, removeImage } = useSettings();
+  const { exportEvents, importEvents, events } = useEvents();
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -41,6 +47,41 @@ export default function SettingsScreen() {
       await addImage(result.assets[0].uri);
     }
   }, [addImage]);
+
+  const handleExport = useCallback(async () => {
+    try {
+      const json = await exportEvents();
+      const filename = `countable_backup_${Date.now()}.json`;
+      const fileUri = FileSystem.cacheDirectory + filename;
+      await FileSystem.writeAsStringAsync(fileUri, json);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Save Countable backup',
+        });
+      } else {
+        await Share.share({ message: json });
+      }
+    } catch (e: any) {
+      Alert.alert('Export failed', e.message || 'Unknown error');
+    }
+  }, [exportEvents]);
+
+  const handleImport = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      const content = await FileSystem.readAsStringAsync(file.uri);
+      const count = await importEvents(content);
+      Alert.alert('Import complete', `${count} events restored.`);
+    } catch (e: any) {
+      Alert.alert('Import failed', e.message || 'Invalid backup file');
+    }
+  }, [importEvents]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -109,6 +150,22 @@ export default function SettingsScreen() {
             <Ionicons name="image-outline" size={20} color={Colors.primary} />
             <Text style={styles.addImageText}>Add Image</Text>
           </Pressable>
+        </View>
+
+        {/* Data backup */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>DATA</Text>
+          <Text style={styles.infoText}>{events.length} events</Text>
+          <View style={styles.dataBtnRow}>
+            <Pressable style={styles.dataBtn} onPress={handleExport}>
+              <Ionicons name="download-outline" size={16} color={Colors.primary} />
+              <Text style={styles.dataBtnText}>Export backup</Text>
+            </Pressable>
+            <Pressable style={styles.dataBtn} onPress={handleImport}>
+              <Ionicons name="cloud-upload-outline" size={16} color={Colors.primary} />
+              <Text style={styles.dataBtnText}>Import backup</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Info */}
@@ -204,5 +261,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: InterWeights.regular,
     color: Colors.mutedForeground,
+  },
+  dataBtnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  dataBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dataBtnText: {
+    fontSize: 13,
+    fontFamily: InterWeights.medium,
+    color: Colors.primary,
   },
 });

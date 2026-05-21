@@ -209,9 +209,9 @@ export default function EventDetailScreen() {
         </View>
 
         {/* Page 2: Bottom section */}
-        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 40 }]}>
+        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 60 }]}>
           {/* Spacer */}
-          <View style={{ height: 20 }} />
+          <View style={{ height: 80 }} />
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
               <View style={styles.progressBarWrap}>

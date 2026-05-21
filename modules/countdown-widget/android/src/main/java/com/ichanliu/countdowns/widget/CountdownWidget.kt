@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.widget.RemoteViews
@@ -49,11 +50,16 @@ class CountdownWidget : AppWidgetProvider() {
             val eventId = prefs.getString(KEY_EVENT_ID, "")
             val bgImage = prefs.getString(KEY_BG_IMAGE, "")
 
-            // Background image
+            // Background image - use Bitmap for reliable display on all Android versions
             if (bgImage?.isNotEmpty() == true) {
                 try {
-                    views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
-                    views.setImageViewUri(R.id.widget_bg_image, Uri.parse(bgImage))
+                    val bmp = BitmapFactory.decodeFile(bgImage)
+                    if (bmp != null) {
+                        views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
+                        views.setImageViewBitmap(R.id.widget_bg_image, bmp)
+                    } else {
+                        views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
+                    }
                 } catch (_: Exception) {
                     views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
                 }
