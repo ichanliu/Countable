@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Alert,
   Image,
+  Modal,
   Share,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -26,6 +28,33 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, addImage, removeImage } = useSettings();
   const { exportEvents, importEvents, events } = useEvents();
+  const [widgetIds, setWidgetIds] = useState<number[]>([]);
+  const [widgetBindings, setWidgetBindings] = useState<Record<number, string>>({});
+  const [showWidgetPicker, setShowWidgetPicker] = useState(false);
+  const [pickingWidgetId, setPickingWidgetId] = useState<number | null>(null);
+
+  const handleBindWidget = useCallback((widgetId: number, eventId: string) => {
+    const { bindWidget } = require('../utils/widgetBridge');
+    bindWidget(widgetId, eventId);
+    setWidgetBindings((prev) => ({ ...prev, [widgetId]: eventId }));
+    setShowWidgetPicker(false);
+    setPickingWidgetId(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
+  // Fetch widget info on mount
+  useEffect(() => {
+    (async () => {
+      const { getWidgetIds, getWidgetEventId } = require('../utils/widgetBridge');
+      const ids = await getWidgetIds();
+      setWidgetIds(ids);
+      const bindings: Record<number, string> = {};
+      for (const id of ids) {
+        bindings[id] = await getWidgetEventId(id);
+      }
+      setWidgetBindings(bindings);
+    })();
+  }, []);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -168,12 +197,77 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Widgets section */}
+        {widgetIds.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>WIDGETS</Text>
+            <Text style={styles.infoText}>{widgetIds.length} widget(s) on homescreen</Text>
+            {widgetIds.map((id) => {
+              const boundEventId = widgetBindings[id] || '';
+              const boundEvent = events.find((e) => e.id === boundEventId);
+              return (
+                <View key={id} style={styles.widgetRow}>
+                  <View>
+                    <Text style={styles.widgetIdText}>Widget #{id}</Text>
+                    <Text style={styles.widgetEventText}>
+                      {boundEvent ? boundEvent.title : 'No event bound'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.widgetBindBtn}
+                    onPress={() => {
+                      setPickingWidgetId(id);
+                      setShowWidgetPicker(true);
+                    }}
+                  >
+                    <Ionicons name="link-outline" size={14} color={Colors.primary} />
+                    <Text style={styles.widgetBindText}>Bind</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* Info */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>INFO</Text>
           <Text style={styles.infoText}>Countable v1.0.0</Text>
         </View>
       </ScrollView>
+
+      {/* Widget event picker modal */}
+      <Modal visible={showWidgetPicker} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowWidgetPicker(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Bind to event</Text>
+            {events.length === 0 ? (
+              <Text style={styles.modalEmpty}>No events yet</Text>
+            ) : (
+              <ScrollView style={styles.modalList}>
+                {events.map((ev) => (
+                  <Pressable
+                    key={ev.id}
+                    style={styles.modalItem}
+                    onPress={() => pickingWidgetId !== null && handleBindWidget(pickingWidgetId, ev.id)}
+                  >
+                    <View>
+                      <Text style={styles.modalItemTitle}>{ev.title}</Text>
+                      <Text style={styles.modalItemDate}>{new Date(ev.targetDate).toLocaleDateString()}</Text>
+                    </View>
+                    {widgetBindings[pickingWidgetId || 0] === ev.id && (
+                      <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                    )}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+            <Pressable style={styles.modalCloseBtn} onPress={() => setShowWidgetPicker(false)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -282,5 +376,103 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: InterWeights.medium,
     color: Colors.primary,
+  },
+  widgetRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  widgetIdText: {
+    fontSize: 12,
+    fontFamily: InterWeights.semiBold,
+    color: Colors.mutedForeground,
+  },
+  widgetEventText: {
+    fontSize: 14,
+    fontFamily: InterWeights.medium,
+    color: Colors.foreground,
+    marginTop: 2,
+  },
+  widgetBindBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  widgetBindText: {
+    fontSize: 12,
+    fontFamily: InterWeights.medium,
+    color: Colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    maxWidth: 360,
+    maxHeight: '70%',
+    backgroundColor: Colors.card,
+    borderRadius: Radius.section,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontFamily: InterWeights.semiBold,
+    color: Colors.foreground,
+    marginBottom: 12,
+  },
+  modalEmpty: {
+    fontSize: 14,
+    fontFamily: InterWeights.regular,
+    color: Colors.mutedForeground,
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  modalList: {
+    maxHeight: 300,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  modalItemTitle: {
+    fontSize: 14,
+    fontFamily: InterWeights.medium,
+    color: Colors.foreground,
+  },
+  modalItemDate: {
+    fontSize: 12,
+    fontFamily: InterWeights.regular,
+    color: Colors.mutedForeground,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalCloseText: {
+    fontSize: 14,
+    fontFamily: InterWeights.medium,
+    color: Colors.foreground,
   },
 });

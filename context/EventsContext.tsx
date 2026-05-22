@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CountdownEvent } from '../constants/types';
-import { syncWidget } from '../utils/widgetBridge';
+import { syncAllWidgets } from '../utils/widgetBridge';
 
 const STORAGE_KEY = '@countdown_events';
 
@@ -66,16 +66,14 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     );
     setEvents(newEvents);
     await save(newEvents);
-    const pinned = newEvents.find((e) => e.isPinned);
-    syncWidget(pinned || null);
+    syncAllWidgets(newEvents);
   }, [events, save]);
 
   const deleteEvent = useCallback(async (id: string) => {
     const newEvents = events.filter((e) => e.id !== id);
     setEvents(newEvents);
     await save(newEvents);
-    const pinned = newEvents.find((e) => e.isPinned);
-    syncWidget(pinned || null);
+    syncAllWidgets(newEvents);
   }, [events, save]);
 
   const togglePin = useCallback(async (id: string) => {
@@ -84,8 +82,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     );
     setEvents(newEvents);
     await save(newEvents);
-    const pinned = newEvents.find((e) => e.isPinned);
-    syncWidget(pinned || null);
+    syncAllWidgets(newEvents);
   }, [events, save]);
 
   const reorderEvents = useCallback(async (newOrder: CountdownEvent[]) => {
@@ -121,8 +118,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     }));
     setEvents(imported);
     await save(imported);
-    const pinned = imported.find((e) => e.isPinned);
-    syncWidget(pinned || null);
+    syncAllWidgets(imported);
     return imported.length;
   }, [save]);
 

@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
@@ -26,6 +27,21 @@ class CountdownWidget : AppWidgetProvider() {
         // Widget first added
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        // Clean up per-widget preferences
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        for (id in appWidgetIds) {
+            val prefix = "widget_${id}_"
+            // Remove all keys with this prefix
+            val keys = prefs.all.keys.filter { it.startsWith(prefix) }
+            for (key in keys) {
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
+
     companion object {
         const val PREFS_NAME = "com.ichanliu.countdowns.widget"
         const val KEY_TITLE = "event_title"
@@ -35,6 +51,17 @@ class CountdownWidget : AppWidgetProvider() {
         const val KEY_EVENT_ID = "event_id"
         const val KEY_BG_IMAGE = "event_bg_image"
 
+        fun getWidgetKey(widgetId: Int, key: String): String = "widget_${widgetId}_$key"
+
+        fun putWidgetPref(editor: SharedPreferences.Editor, widgetId: Int, key: String, value: String) {
+            editor.putString(getWidgetKey(widgetId, key), value)
+        }
+
+        fun getWidgetPref(prefs: SharedPreferences, widgetId: Int, key: String): String? {
+            val widgetKey = getWidgetKey(widgetId, key)
+            return prefs.getString(widgetKey, null) ?: prefs.getString(key, null)
+        }
+
         fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -43,15 +70,15 @@ class CountdownWidget : AppWidgetProvider() {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val views = RemoteViews(context.packageName, R.layout.countdown_widget)
 
-            val title = prefs.getString(KEY_TITLE, null)
-            val count = prefs.getString(KEY_COUNT, null)
-            val label = prefs.getString(KEY_LABEL, null)
-            val colorStr = prefs.getString(KEY_COLOR, "#5B9EFF")
-            val eventId = prefs.getString(KEY_EVENT_ID, "")
-            val bgImage = prefs.getString(KEY_BG_IMAGE, "")
+            val title = getWidgetPref(prefs, appWidgetId, KEY_TITLE)
+            val count = getWidgetPref(prefs, appWidgetId, KEY_COUNT)
+            val label = getWidgetPref(prefs, appWidgetId, KEY_LABEL)
+            val colorStr = getWidgetPref(prefs, appWidgetId, KEY_COLOR) ?: "#5B9EFF"
+            val eventId = getWidgetPref(prefs, appWidgetId, KEY_EVENT_ID) ?: ""
+            val bgImage = getWidgetPref(prefs, appWidgetId, KEY_BG_IMAGE) ?: ""
 
             // Background image - scale down for Binder transaction limit (~1MB)
-            if (bgImage?.isNotEmpty() == true) {
+            if (bgImage.isNotEmpty()) {
                 try {
                     val opts = BitmapFactory.Options().apply {
                         inSampleSize = 4
@@ -76,7 +103,7 @@ class CountdownWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_label, label ?: "DAYS LEFT")
 
                 try {
-                    val color = Color.parseColor(colorStr ?: "#5B9EFF")
+                    val color = Color.parseColor(colorStr)
                     views.setTextColor(R.id.widget_count, Color.WHITE)
                     views.setTextColor(R.id.widget_label, color)
                 } catch (_: Exception) {}
@@ -88,7 +115,7 @@ class CountdownWidget : AppWidgetProvider() {
             }
 
             // Click handler - open app with deep link to event detail
-            val deepLink = if (eventId?.isNotEmpty() == true) {
+            val deepLink = if (eventId.isNotEmpty()) {
                 "countdowns://event-detail?eventId=$eventId"
             } else {
                 "countdowns://"

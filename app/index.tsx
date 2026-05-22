@@ -30,9 +30,8 @@ export default function HomeScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
-        const pinned = events.find((e) => e.isPinned);
-        const { syncWidget } = require('../utils/widgetBridge');
-        syncWidget(pinned || null);
+        const { syncAllWidgets } = require('../utils/widgetBridge');
+        syncAllWidgets(events);
       }
       appStateRef.current = nextState;
     });
