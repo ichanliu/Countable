@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ImageBackground,
   Alert,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -256,17 +257,9 @@ export default function EventDetailScreen() {
               <Ionicons name="calendar-outline" size={18} color={Colors.mutedForeground} />
               <Text style={styles.editLabel}>Target Date</Text>
             </View>
-            <Pressable onPress={() => setShowTargetPicker(!showTargetPicker)}>
+            <Pressable onPress={() => setShowTargetPicker(true)}>
               <Text style={styles.editValue}>{formatDate(event.targetDate)}</Text>
             </Pressable>
-            {showTargetPicker && (
-              <View style={styles.editPicker}>
-                <CalendarPicker
-                  selectedDate={new Date(event.targetDate)}
-                  onDateChange={handleTargetDateChange}
-                />
-              </View>
-            )}
           </View>
 
           {/* Created date */}
@@ -275,20 +268,35 @@ export default function EventDetailScreen() {
               <Ionicons name="time-outline" size={18} color={Colors.mutedForeground} />
               <Text style={styles.editLabel}>Created</Text>
             </View>
-            <Pressable onPress={() => setShowCreatedPicker(!showCreatedPicker)}>
+            <Pressable onPress={() => setShowCreatedPicker(true)}>
               <Text style={styles.editValue}>{formatDate(event.createdAt)}</Text>
             </Pressable>
-            {showCreatedPicker && (
-              <View style={styles.editPicker}>
-                <CalendarPicker
-                  selectedDate={createdDate}
-                  onDateChange={handleCreatedDateChange}
-                />
-              </View>
-            )}
           </View>
         </View>
       </ScrollView>
+
+      {/* Calendar modal - avoids paging scroll conflict */}
+      <Modal visible={showTargetPicker} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowTargetPicker(false)}>
+          <Pressable style={styles.modalContent}>
+            <CalendarPicker
+              selectedDate={new Date(event.targetDate)}
+              onDateChange={handleTargetDateChange}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showCreatedPicker} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCreatedPicker(false)}>
+          <Pressable style={styles.modalContent}>
+            <CalendarPicker
+              selectedDate={createdDate}
+              onDateChange={handleCreatedDateChange}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -424,5 +432,20 @@ const styles = StyleSheet.create({
   },
   editPicker: {
     marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    maxWidth: 360,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.section,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
   },
 });

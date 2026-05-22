@@ -50,10 +50,13 @@ class CountdownWidget : AppWidgetProvider() {
             val eventId = prefs.getString(KEY_EVENT_ID, "")
             val bgImage = prefs.getString(KEY_BG_IMAGE, "")
 
-            // Background image - use Bitmap for reliable display on all Android versions
+            // Background image - scale down for Binder transaction limit (~1MB)
             if (bgImage?.isNotEmpty() == true) {
                 try {
-                    val bmp = BitmapFactory.decodeFile(bgImage)
+                    val opts = BitmapFactory.Options().apply {
+                        inSampleSize = 4
+                    }
+                    val bmp = BitmapFactory.decodeFile(bgImage, opts)
                     if (bmp != null) {
                         views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
                         views.setImageViewBitmap(R.id.widget_bg_image, bmp)

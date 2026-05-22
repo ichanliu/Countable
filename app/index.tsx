@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -22,6 +23,20 @@ export default function HomeScreen() {
   const { events, loading, togglePin, reorderEvents } = useEvents();
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => Number(b.isPinned) - Number(a.isPinned));
+  }, [events]);
+
+  // Sync widget when app comes to foreground (day counter may have changed)
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        const pinned = events.find((e) => e.isPinned);
+        const { syncWidget } = require('../utils/widgetBridge');
+        syncWidget(pinned || null);
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
   }, [events]);
   const [isArrangeMode, setIsArrangeMode] = useState(false);
   const safeTop = Platform.OS === 'web' ? 67 : insets.top;
