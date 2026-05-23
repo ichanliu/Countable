@@ -34,13 +34,15 @@ export default function SettingsScreen() {
   const [pickingWidgetId, setPickingWidgetId] = useState<number | null>(null);
 
   const handleBindWidget = useCallback((widgetId: number, eventId: string) => {
-    const { bindWidget } = require('../utils/widgetBridge');
+    const { bindWidget, syncWidget } = require('../utils/widgetBridge');
     bindWidget(widgetId, eventId);
+    const event = events.find((e) => e.id === eventId);
+    syncWidget(event || null, widgetId);
     setWidgetBindings((prev) => ({ ...prev, [widgetId]: eventId }));
     setShowWidgetPicker(false);
     setPickingWidgetId(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, []);
+  }, [events]);
 
   // Fetch widget info on mount
   useEffect(() => {
@@ -238,7 +240,8 @@ export default function SettingsScreen() {
 
       {/* Widget event picker modal */}
       <Modal visible={showWidgetPicker} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowWidgetPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowWidgetPicker(false)} />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Bind to event</Text>
             {events.length === 0 ? (
@@ -266,7 +269,7 @@ export default function SettingsScreen() {
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );

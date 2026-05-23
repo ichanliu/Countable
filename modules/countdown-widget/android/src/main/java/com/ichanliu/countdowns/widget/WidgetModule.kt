@@ -41,7 +41,7 @@ class WidgetModule(reactContext: ReactApplicationContext) :
         val context = reactApplicationContext
         val manager = AppWidgetManager.getInstance(context) ?: return
         val componentName = ComponentName(context, CountdownWidget::class.java)
-        val appWidgetIds = manager.getAppWidgetIds(componentName)
+        val allWidgetIds = manager.getAppWidgetIds(componentName)
 
         val title = data.getString("title") ?: ""
         val count = data.getString("count") ?: "--"
@@ -49,11 +49,18 @@ class WidgetModule(reactContext: ReactApplicationContext) :
         val color = data.getString("color") ?: "#5B9EFF"
         val eventId = data.getString("eventId") ?: ""
         val bgImage = data.getString("bgImage") ?: ""
+        val targetWidgetId = if (data.hasKey("targetWidgetId")) data.getInt("targetWidgetId") else -1
 
         val prefs = context.getSharedPreferences(CountdownWidget.PREFS_NAME, Context.MODE_PRIVATE)
 
-        // Save per-widget data for each active widget instance
-        for (widgetId in appWidgetIds) {
+        // Determine which widgets to update
+        val idsToUpdate = if (targetWidgetId >= 0 && allWidgetIds.any { it == targetWidgetId }) {
+            intArrayOf(targetWidgetId)
+        } else {
+            allWidgetIds
+        }
+
+        for (widgetId in idsToUpdate) {
             val editor = prefs.edit()
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_TITLE, title)
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_COUNT, count)
@@ -62,10 +69,7 @@ class WidgetModule(reactContext: ReactApplicationContext) :
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_EVENT_ID, eventId)
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_BG_IMAGE, bgImage)
             editor.apply()
-        }
-
-        for (appWidgetId in appWidgetIds) {
-            CountdownWidget.updateAppWidget(context, manager, appWidgetId)
+            CountdownWidget.updateAppWidget(context, manager, widgetId)
         }
     }
 

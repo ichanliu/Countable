@@ -6,8 +6,8 @@ const WidgetModule = Platform.OS === 'android'
   ? NativeModules.CountdownWidgetModule
   : null;
 
-// Sync a single event to ALL active widgets
-export function syncWidget(event: CountdownEvent | null): void {
+// Sync a single event to ALL active widgets (or to a specific widget if widgetId provided)
+export function syncWidget(event: CountdownEvent | null, widgetId?: number): void {
   if (Platform.OS !== 'android' || !WidgetModule) return;
 
   try {
@@ -18,6 +18,7 @@ export function syncWidget(event: CountdownEvent | null): void {
         label: 'PIN AN EVENT',
         color: '#7A8A9E',
         bgImage: '',
+        targetWidgetId: widgetId ?? -1,
       });
       return;
     }
@@ -55,6 +56,7 @@ export function syncWidget(event: CountdownEvent | null): void {
       color,
       eventId: event.id,
       bgImage: event.widgetImageUri || event.imageUri || '',
+      targetWidgetId: widgetId ?? -1,
     });
   } catch (error) {
     console.warn('Widget sync failed:', error);
@@ -107,12 +109,15 @@ export async function syncAllWidgets(events: CountdownEvent[]): Promise<void> {
       if (boundEventId) {
         const event = events.find((e) => e.id === boundEventId);
         if (event) {
-          syncWidget(event);
+          syncWidget(event, widgetId);
+        } else {
+          // Event was deleted - clear this widget
+          syncWidget(null, widgetId);
         }
       } else {
         // No event bound - sync the first pinned event as default
         const pinned = events.find((e) => e.isPinned);
-        syncWidget(pinned || null);
+        syncWidget(pinned || null, widgetId);
       }
     }
   } catch (e) {

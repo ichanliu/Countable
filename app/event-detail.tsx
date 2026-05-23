@@ -277,25 +277,27 @@ export default function EventDetailScreen() {
 
       {/* Calendar modal - avoids paging scroll conflict */}
       <Modal visible={showTargetPicker} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowTargetPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTargetPicker(false)} />
           <Pressable style={styles.modalContent}>
             <CalendarPicker
               selectedDate={new Date(event.targetDate)}
               onDateChange={handleTargetDateChange}
             />
           </Pressable>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal visible={showCreatedPicker} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowCreatedPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreatedPicker(false)} />
           <Pressable style={styles.modalContent}>
             <CalendarPicker
               selectedDate={createdDate}
               onDateChange={handleCreatedDateChange}
             />
           </Pressable>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );
