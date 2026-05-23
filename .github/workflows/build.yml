@@ -16,9 +16,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Prebuild Android
-        run: npx expo prebuild --platform android --no-install
+        run: npx expo prebuild --platform android --clean
       - name: Build Release APK
-        run: cd android && ./gradlew assembleRelease
+        run: cd android && export NODE_OPTIONS="--max-old-space-size=6144" && ./gradlew assembleRelease --no-daemon
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
