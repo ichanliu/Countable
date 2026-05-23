@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
@@ -77,13 +78,40 @@ class CountdownWidget : AppWidgetProvider() {
             val eventId = getWidgetPref(prefs, appWidgetId, KEY_EVENT_ID) ?: ""
             val bgImage = getWidgetPref(prefs, appWidgetId, KEY_BG_IMAGE) ?: ""
 
-            // Background image - scale down for Binder transaction limit (~1MB)
+            // Background image - decode with size limit to stay under Binder 1MB limit
             if (bgImage.isNotEmpty()) {
                 try {
-                    val opts = BitmapFactory.Options().apply {
-                        inSampleSize = 4
+                    // First pass: read dimensions only
+                    val dimOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(bgImage, dimOpts)
+
+                    // Calculate sample size to keep the longest side under ~400px
+                    val maxDimension = 400
+                    var scale = 1
+                    while (dimOpts.outWidth / scale > maxDimension
+                        || dimOpts.outHeight / scale > maxDimension
+                    ) {
+                        scale *= 2
                     }
-                    val bmp = BitmapFactory.decodeFile(bgImage, opts)
+
+                    // Second pass: decode at the calculated scale
+                    val opts = BitmapFactory.Options().apply { inSampleSize = scale }
+                    var bmp = BitmapFactory.decodeFile(bgImage, opts)
+
+                    // Final safety cap - scale maintaining aspect ratio
+                    if (bmp != null && (bmp.width > maxDimension || bmp.height > maxDimension)) {
+                        val ratio = minOf(
+                            maxDimension.toFloat() / bmp.width,
+                            maxDimension.toFloat() / bmp.height
+                        )
+                        bmp = Bitmap.createScaledBitmap(
+                            bmp,
+                            (bmp.width * ratio).toInt(),
+                            (bmp.height * ratio).toInt(),
+                            true
+                        )
+                    }
+
                     if (bmp != null) {
                         views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
                         views.setImageViewBitmap(R.id.widget_bg_image, bmp)

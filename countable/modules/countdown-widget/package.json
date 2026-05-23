@@ -1,6 +1,0 @@
-{
-  "name": "countdown-widget",
-  "version": "1.0.0",
-  "main": "expo-module.config.js",
-  "private": true
-}

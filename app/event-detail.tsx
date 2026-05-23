@@ -8,6 +8,7 @@ import {
   ImageBackground,
   Alert,
   Modal,
+  PanResponder,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,8 @@ import * as FileSystem from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, Gradients, InterWeights } from '../constants/theme';
 import { useEvents } from '../context/EventsContext';
-import { getDayType, getDayDiff, formatDate } from '../constants/types';
+import { getDayType, getDayDiff, formatDate, DEFAULT_HERO } from '../constants/types';
+import type { HeroSettings } from '../constants/types';
 import CalendarPicker from '../components/CalendarPicker';
 
 export default function EventDetailScreen() {
@@ -31,6 +33,35 @@ export default function EventDetailScreen() {
   const { height: screenHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const pageHeight = screenHeight;
+
+  // Hero customization state
+  const savedSettings = event?.heroSettings || DEFAULT_HERO;
+  const [showHeroEditor, setShowHeroEditor] = useState(false);
+  const [editFontSize, setEditFontSize] = useState(savedSettings.fontSize);
+  const [editVPos, setEditVPos] = useState(savedSettings.verticalPosition);
+  const [editHPos, setEditHPos] = useState(savedSettings.horizontalPosition);
+  const [editTextColor, setEditTextColor] = useState(savedSettings.textColor);
+
+  // Drag state for editor
+  const dragStart = useRef({ v: 0, h: 0 });
+
+  const dragPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { dragStart.current = { v: editVPos, h: editHPos }; },
+    onPanResponderMove: (_, g) => {
+      setEditVPos(Math.max(0, Math.min(100, dragStart.current.v + (g.dy / pageHeight) * 100)));
+      setEditHPos(Math.max(0, Math.min(100, dragStart.current.h + (g.dx / pageHeight) * 100)));
+    },
+    onPanResponderRelease: () => {},
+  })).current;
+
+  const resizePan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderMove: (_, g) => {
+      const delta = (-g.dy + g.dx) / 4;
+      setEditFontSize(Math.max(24, Math.min(200, savedSettings.fontSize + delta)));
+    },
+  })).current;
 
   const [showCreatedPicker, setShowCreatedPicker] = useState(false);
   const [showTargetPicker, setShowTargetPicker] = useState(false);
@@ -145,6 +176,27 @@ export default function EventDetailScreen() {
     }
   }, [event, updateEvent]);
 
+  // Hero style handlers
+  const openHeroEditor = useCallback(() => {
+    setEditFontSize(savedSettings.fontSize);
+    setEditVPos(savedSettings.verticalPosition);
+    setEditHPos(savedSettings.horizontalPosition);
+    setEditTextColor(savedSettings.textColor);
+    setShowHeroEditor(true);
+  }, [savedSettings]);
+
+  const saveHeroStyle = useCallback(() => {
+    if (!event) return;
+    const settings: HeroSettings = { fontSize: Math.round(editFontSize), verticalPosition: editVPos, horizontalPosition: editHPos, textColor: editTextColor };
+    updateEvent(event.id, { heroSettings: settings });
+    setShowHeroEditor(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [event, editFontSize, editVPos, editHPos, editTextColor, updateEvent]);
+
+  const cancelHeroEditor = useCallback(() => {
+    setShowHeroEditor(false);
+  }, []);
+
   if (!event) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -179,7 +231,7 @@ export default function EventDetailScreen() {
         decelerationRate="fast"
       >
         {/* Page 1: Hero section */}
-        <View style={{ height: pageHeight, justifyContent: 'center' }}>
+        <View style={{ height: pageHeight }}>
           {event.bgImageUri ? (
             <ImageBackground
               source={{ uri: event.bgImageUri }}
@@ -198,14 +250,22 @@ export default function EventDetailScreen() {
               style={StyleSheet.absoluteFill}
             />
           )}
-          <View style={styles.heroContent}>
-            <Text style={[styles.heroNumber, { color: dayColor }]}>
-              {dayType === 'today' ? '🎉' : absDiff}
-            </Text>
-            {dayLabel ? (
-              <Text style={[styles.heroLabel, { color: dayColor }]}>{dayLabel}</Text>
-            ) : null}
-            <Text style={styles.heroTitle}>{event.title}</Text>
+          <View style={{ flex: 1, flexDirection: 'column' }}>
+            <View style={{ flex: savedSettings.verticalPosition }} />
+            <View style={{ flexDirection: 'row' }}>
+              <View style={{ flex: savedSettings.horizontalPosition }} />
+              <View style={styles.heroContent}>
+                <Text style={[styles.heroNumber, { fontSize: savedSettings.fontSize, color: savedSettings.textColor }]}>
+                  {dayType === 'today' ? '🎉' : absDiff}
+                </Text>
+                {dayLabel ? (
+                  <Text style={[styles.heroLabel, { color: savedSettings.textColor }]}>{dayLabel}</Text>
+                ) : null}
+                <Text style={[styles.heroTitle, { color: savedSettings.textColor }]}>{event.title}</Text>
+              </View>
+              <View style={{ flex: 100 - savedSettings.horizontalPosition }} />
+            </View>
+            <View style={{ flex: 100 - savedSettings.verticalPosition }} />
           </View>
         </View>
 
@@ -248,6 +308,18 @@ export default function EventDetailScreen() {
             <Pressable style={styles.editActionBtn} onPress={handlePickWidgetImage}>
               <Ionicons name={event.widgetImageUri ? "swap-horizontal" : "add"} size={16} color={Colors.primary} />
               <Text style={styles.editActionText}>{event.widgetImageUri ? 'Change' : 'Add Image'}</Text>
+            </Pressable>
+          </View>
+
+          {/* Hero Style */}
+          <View style={styles.editSection}>
+            <View style={styles.editRow}>
+              <Ionicons name="text-outline" size={18} color={Colors.mutedForeground} />
+              <Text style={styles.editLabel}>Hero Style</Text>
+            </View>
+            <Pressable style={styles.editActionBtn} onPress={openHeroEditor}>
+              <Ionicons name="expand-outline" size={16} color={Colors.primary} />
+              <Text style={styles.editActionText}>Customize</Text>
             </Pressable>
           </View>
 
@@ -297,6 +369,77 @@ export default function EventDetailScreen() {
               onDateChange={handleCreatedDateChange}
             />
           </Pressable>
+        </View>
+      </Modal>
+
+      {/* Full-screen hero editor */}
+      <Modal visible={showHeroEditor} animationType="fade" statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {/* Background */}
+          {event?.bgImageUri ? (
+            <ImageBackground source={{ uri: event.bgImageUri }} style={StyleSheet.absoluteFill} resizeMode="cover">
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
+            </ImageBackground>
+          ) : (
+            <LinearGradient colors={(bgGradient || ['#0F2027', '#203A43', '#2C5364']) as unknown as string[]} style={StyleSheet.absoluteFill} />
+          )}
+
+          {/* Top bar */}
+          <View style={{ position: 'absolute', top: (insets.top || 40) + 8, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, zIndex: 20 }}>
+            <Pressable onPress={cancelHeroEditor} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </Pressable>
+            <Pressable onPress={saveHeroStyle} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 14, fontFamily: InterWeights.semiBold }}>Save</Text>
+            </Pressable>
+          </View>
+
+          {/* Draggable text with bounding box */}
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <View style={{ flexDirection: 'column' }}>
+              <View style={{ flex: editVPos }} />
+
+              <View style={{ flexDirection: 'row' }}>
+                <View style={{ flex: editHPos }} />
+
+                {/* Bounding box - drag to move, corner handle to resize */}
+                <View {...dragPan.panHandlers} style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderRadius: 4, paddingVertical: 8, paddingHorizontal: 12, position: 'relative' }}>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: Math.round(editFontSize), fontFamily: InterWeights.bold, color: editTextColor, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 }}>
+                      {absDiff}
+                    </Text>
+                    <Text style={{ fontSize: 16, fontFamily: InterWeights.semiBold, color: editTextColor, letterSpacing: 2, marginTop: 4 }}>{dayLabel}</Text>
+                    <Text style={{ fontSize: 14, fontFamily: InterWeights.medium, color: editTextColor, opacity: 0.7, marginTop: 4 }}>{event?.title}</Text>
+                  </View>
+
+                  {/* Resize handle at box corner */}
+                  <View
+                    {...resizePan.panHandlers}
+                    style={{ position: 'absolute', bottom: -10, right: -10, width: 20, height: 20, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <View style={{ width: 10, height: 10, borderRightWidth: 2, borderBottomWidth: 2, borderColor: 'rgba(255,255,255,0.7)' }} />
+                  </View>
+                </View>
+
+                <View style={{ flex: 100 - editHPos }} />
+              </View>
+
+              <View style={{ flex: 100 - editVPos }} />
+            </View>
+          </View>
+
+          {/* Bottom bar - color picker */}
+          <View style={{ position: 'absolute', bottom: (insets.bottom || 20) + 8, left: 0, right: 0, alignItems: 'center', zIndex: 20 }}>
+            <View style={{ flexDirection: 'row', gap: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10 }}>
+              {['#FFFFFF', '#5B9EFF', '#2ECC71', '#FF6B35', '#FFD700', '#E74C3C', '#9B59B6'].map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => setEditTextColor(c)}
+                  style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: editTextColor === c ? 2 : 0, borderColor: '#fff' }}
+                />
+              ))}
+            </View>
+          </View>
         </View>
       </Modal>
     </View>
@@ -435,7 +578,6 @@ const styles = StyleSheet.create({
   editPicker: {
     marginTop: 4,
   },
-  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
@@ -449,5 +591,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     padding: 16,
+  },
+  editPicker: {
+    marginTop: 4,
   },
 });
