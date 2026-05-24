@@ -8,6 +8,7 @@ import {
   ImageBackground,
   Alert,
   Modal,
+  Animated,
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
@@ -37,39 +38,42 @@ export default function EventDetailScreen() {
   // Hero customization state
   const savedSettings = event?.heroSettings || DEFAULT_HERO;
   const [showHeroEditor, setShowHeroEditor] = useState(false);
-  const [editFontSize, setEditFontSize] = useState(savedSettings.fontSize);
-  const [editPosX, setEditPosX] = useState(savedSettings.posX);
-  const [editPosY, setEditPosY] = useState(savedSettings.posY);
   const [editTextColor, setEditTextColor] = useState(savedSettings.textColor);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  // Drag state
-  const dragOrigin = useRef({ x: 0, y: 0 });
+  const [showCreatedPicker, setShowCreatedPicker] = useState(false);
+  const [showTargetPicker, setShowTargetPicker] = useState(false);
+
+  // Animated drag + resize for editor
+  const dragAnim = useRef(new Animated.ValueXY()).current;
+  const dragBase = useRef({ x: 0, y: 0 });
+  const sizeBase = useRef(64);
+  const [fontSize, setFontSize] = useState(savedSettings.fontSize);
 
   const boxPan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: () => {
-      dragOrigin.current = { x: editPosX, y: editPosY };
+      dragAnim.setOffset({ x: dragBase.current.x, y: dragBase.current.y });
+      dragAnim.setValue({ x: 0, y: 0 });
     },
     onPanResponderMove: (_, g) => {
-      const sensitivity = 0.8;
-      setEditPosX(Math.max(0, Math.min(100, dragOrigin.current.x + (g.dx / (pageHeight * sensitivity)) * 100)));
-      setEditPosY(Math.max(0, Math.min(100, dragOrigin.current.y + (g.dy / (pageHeight * sensitivity)) * 100)));
+      dragAnim.setValue({ x: g.dx, y: g.dy });
+    },
+    onPanResponderRelease: (_, g) => {
+      dragBase.current = { x: dragBase.current.x + g.dx, y: dragBase.current.y + g.dy };
+      dragAnim.setOffset({ x: dragBase.current.x, y: dragBase.current.y });
+      dragAnim.setValue({ x: 0, y: 0 });
     },
   })).current;
 
-  const handleResize = useRef(PanResponder.create({
+  const handlePan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { sizeBase.current = fontSize; },
     onPanResponderMove: (_, g) => {
-      const delta = Math.round((g.dx - g.dy) / 4);
-      setEditFontSize(Math.max(28, Math.min(120, 64 + delta)));
+      setFontSize(Math.max(28, Math.min(140, sizeBase.current + (g.dx - g.dy) / 4)));
     },
   })).current;
-
-  const [showCreatedPicker, setShowCreatedPicker] = useState(false);
-  const [showTargetPicker, setShowTargetPicker] = useState(false);
 
   const dayType = event ? getDayType(event.targetDate) : 'future';
   const diff = event ? getDayDiff(event.targetDate) : 0;
@@ -183,32 +187,31 @@ export default function EventDetailScreen() {
 
   // Hero style handlers
   const openHeroEditor = useCallback(() => {
-    setEditFontSize(savedSettings.fontSize);
-    setEditPosX(savedSettings.posX);
-    setEditPosY(savedSettings.posY);
+    setFontSize(savedSettings.fontSize);
     setEditTextColor(savedSettings.textColor);
-    setShowResetConfirm(false);
+    dragBase.current = { x: 0, y: 0 };
+    dragAnim.setOffset({ x: 0, y: 0 });
+    dragAnim.setValue({ x: 0, y: 0 });
     setShowHeroEditor(true);
   }, [savedSettings]);
 
   const saveHeroStyle = useCallback(() => {
     if (!event) return;
-    const settings: HeroSettings = { fontSize: editFontSize, posX: editPosX, posY: editPosY, textColor: editTextColor };
+    const pct = Math.max(0, Math.min(100, 50 + (dragBase.current.y / pageHeight) * 100));
+    const settings: HeroSettings = { fontSize, posX: 50, posY: Math.round(pct), textColor: editTextColor };
     updateEvent(event.id, { heroSettings: settings });
     setShowHeroEditor(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [event, editFontSize, editPosX, editPosY, editTextColor, updateEvent]);
+  }, [event, fontSize, editTextColor, updateEvent, pageHeight]);
 
-  const cancelHeroEditor = useCallback(() => {
-    setShowHeroEditor(false);
-  }, []);
+  const cancelHeroEditor = useCallback(() => setShowHeroEditor(false), []);
 
   const resetHeroStyle = useCallback(() => {
-    setEditFontSize(DEFAULT_HERO.fontSize);
-    setEditPosX(DEFAULT_HERO.posX);
-    setEditPosY(DEFAULT_HERO.posY);
+    dragBase.current = { x: 0, y: 0 };
+    dragAnim.setOffset({ x: 0, y: 0 });
+    dragAnim.setValue({ x: 0, y: 0 });
+    setFontSize(DEFAULT_HERO.fontSize);
     setEditTextColor(DEFAULT_HERO.textColor);
-    setShowResetConfirm(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
@@ -265,29 +268,23 @@ export default function EventDetailScreen() {
               style={StyleSheet.absoluteFill}
             />
           )}
-          <View style={{ flex: 1, flexDirection: 'column' }}>
-            <View style={{ flex: savedSettings.posY }} />
-            <View style={{ flexDirection: 'row', flexShrink: 1 }}>
-              <View style={{ flex: savedSettings.posX }} />
-              <View style={styles.heroContent}>
-                <Text style={[styles.heroNumber, { fontSize: savedSettings.fontSize, color: savedSettings.textColor }]}>
-                  {dayType === 'today' ? '🎉' : absDiff}
-                </Text>
-                {dayLabel ? (
-                  <Text style={[styles.heroLabel, { color: savedSettings.textColor }]}>{dayLabel}</Text>
-                ) : null}
-                <Text style={[styles.heroTitle, { color: savedSettings.textColor }]}>{event.title}</Text>
-              </View>
-              <View style={{ flex: 100 - savedSettings.posX }} />
+          <View style={{ flex: 1, paddingTop: (pageHeight - 120) * savedSettings.posY / 100, alignItems: 'center' }}>
+            <View style={styles.heroContent}>
+              <Text style={[styles.heroNumber, { fontSize: savedSettings.fontSize, color: savedSettings.textColor }]}>
+                {dayType === 'today' ? '🎉' : absDiff}
+              </Text>
+              {dayLabel ? (
+                <Text style={[styles.heroLabel, { color: savedSettings.textColor }]}>{dayLabel}</Text>
+              ) : null}
+              <Text style={[styles.heroTitle, { color: savedSettings.textColor }]}>{event.title}</Text>
             </View>
-            <View style={{ flex: 100 - savedSettings.posY }} />
           </View>
         </View>
 
         {/* Page 2: Bottom section */}
-        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 40 }]}>
+        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 20 }]}>
           {/* Spacer */}
-          <View style={{ height: 40 }} />
+          <View style={{ height: 20 }} />
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
               <View style={styles.progressBarWrap}>
@@ -387,7 +384,7 @@ export default function EventDetailScreen() {
         </View>
       </Modal>
 
-      {/* Full-screen hero editor */}
+      {/* Hero editor - drag + corner resize */}
       <Modal visible={showHeroEditor} animationType="fade" statusBarTranslucent>
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           {event?.bgImageUri ? (
@@ -398,60 +395,53 @@ export default function EventDetailScreen() {
             <LinearGradient colors={(bgGradient || ['#0F2027', '#203A43', '#2C5364']) as unknown as string[]} style={StyleSheet.absoluteFill} />
           )}
 
-          {/* Top bar: Reset | Spacer | Cancel | Save */}
+          {/* Top: Reset | Cancel | Save */}
           <View style={{ position: 'absolute', top: (insets.top || 40) + 8, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, zIndex: 20 }}>
-            <Pressable onPress={resetHeroStyle} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)' }}>
+            <Pressable onPress={resetHeroStyle} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)' }}>
               <Text style={{ color: '#fff', fontSize: 13, fontFamily: InterWeights.medium }}>Reset</Text>
             </Pressable>
             <View style={{ flex: 1 }} />
             <Pressable onPress={cancelHeroEditor} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="close" size={20} color="#fff" />
             </Pressable>
-            <Pressable onPress={saveHeroStyle} style={{ marginLeft: 8, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={saveHeroStyle} style={{ marginLeft: 8, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 18, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#fff', fontSize: 13, fontFamily: InterWeights.semiBold }}>Save</Text>
             </Pressable>
           </View>
 
-          {/* Draggable text area */}
-          <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 16 }}>
-            <View style={{ flexDirection: 'column', alignItems: 'center' }}>
-              <View style={{ flex: editPosY }} />
-              <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'center' }}>
-                <View style={{ flex: editPosX }} />
-
-                {/* Bounding box */}
-                <View {...boxPan.panHandlers} style={{ maxWidth: '90%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 6, paddingVertical: 10, paddingHorizontal: 16, position: 'relative' }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: Math.round(editFontSize), fontFamily: InterWeights.bold, color: editTextColor, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8, textAlign: 'center', lineHeight: Math.round(editFontSize * 1.1) }}>
-                      {absDiff}
-                    </Text>
-                    <Text style={{ fontSize: 16, fontFamily: InterWeights.semiBold, color: editTextColor, letterSpacing: 2, marginTop: 4 }}>{dayLabel}</Text>
-                    <Text style={{ fontSize: 14, fontFamily: InterWeights.medium, color: editTextColor, opacity: 0.7, marginTop: 4 }}>{event?.title}</Text>
-                  </View>
-
-                  {/* Resize handle */}
-                  <View {...handleResize.panHandlers} style={{ position: 'absolute', bottom: -9, right: -9, width: 18, height: 18, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}>
-                    <View style={{ width: 8, height: 8, borderRightWidth: 2, borderBottomWidth: 2, borderColor: 'rgba(255,255,255,0.8)' }} />
-                  </View>
-                </View>
-
-                <View style={{ flex: 100 - editPosX }} />
+          {/* Draggable text box */}
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Animated.View
+              {...boxPan.panHandlers}
+              style={[{
+                borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+                borderStyle: 'dashed', borderRadius: 8,
+                paddingVertical: 14, paddingHorizontal: 22,
+              }, { transform: [{ translateX: dragAnim.x }, { translateY: dragAnim.y }] }]}
+            >
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize, fontFamily: InterWeights.bold, color: editTextColor, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8, textAlign: 'center' }}>
+                  {absDiff}
+                </Text>
+                <Text style={{ fontSize: 16, fontFamily: InterWeights.semiBold, color: editTextColor, letterSpacing: 2, marginTop: 4 }}>{dayLabel}</Text>
+                <Text style={{ fontSize: 14, fontFamily: InterWeights.medium, color: editTextColor, opacity: 0.7, marginTop: 4 }}>{event?.title}</Text>
               </View>
-              <View style={{ flex: 100 - editPosY }} />
-            </View>
+
+              {/* Resize handle at bottom-right */}
+              <View
+                {...handlePan.panHandlers}
+                style={{ position: 'absolute', bottom: -15, right: -15, width: 30, height: 30, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 6, borderWidth: 2, borderColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <View style={{ width: 12, height: 12, borderRightWidth: 2.5, borderBottomWidth: 2.5, borderColor: 'rgba(255,255,255,0.85)' }} />
+              </View>
+            </Animated.View>
           </View>
 
-          {/* Bottom: size indicator + color picker */}
-          <View style={{ position: 'absolute', bottom: (insets.bottom || 20) + 8, left: 0, right: 0, alignItems: 'center', zIndex: 20, gap: 8 }}>
-            {/* Size label */}
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 }}>
-              <Text style={{ color: '#fff', fontSize: 12, fontFamily: InterWeights.medium }}>{Math.round(editFontSize)}px</Text>
-            </View>
-
-            {/* Color picker */}
-            <View style={{ flexDirection: 'row', gap: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 24, paddingHorizontal: 14, paddingVertical: 8 }}>
+          {/* Bottom color picker */}
+          <View style={{ position: 'absolute', bottom: (insets.bottom || 30), left: 0, right: 0, alignItems: 'center', zIndex: 20 }}>
+            <View style={{ flexDirection: 'row', gap: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 24, paddingHorizontal: 14, paddingVertical: 8 }}>
               {['#FFFFFF', '#5B9EFF', '#2ECC71', '#FF6B35', '#FFD700', '#E74C3C', '#9B59B6'].map((c) => (
-                <Pressable key={c} onPress={() => setEditTextColor(c)} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c, borderWidth: editTextColor === c ? 2 : 0, borderColor: '#fff' }} />
+                <Pressable key={c} onPress={() => setEditTextColor(c)} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: editTextColor === c ? 2 : 0, borderColor: '#fff' }} />
               ))}
             </View>
           </View>
@@ -521,10 +511,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   bottomSection: {
-    marginTop: 40,
     paddingHorizontal: 24,
     paddingBottom: 60,
-    gap: 24,
+    gap: 12,
   },
   ringContainer: {
     alignItems: 'center',
