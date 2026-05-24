@@ -7,22 +7,7 @@ export interface CountdownEvent {
   widgetImageUri?: string;
   isPinned: boolean;
   createdAt: string;
-  heroSettings?: HeroSettings;
 }
-
-export interface HeroSettings {
-  fontSize: number;
-  posX: number; // 0 (left) to 100 (right), 50 = center
-  posY: number; // 0 (top) to 100 (bottom), 50 = center
-  textColor: string;
-}
-
-export const DEFAULT_HERO: HeroSettings = {
-  fontSize: 64,
-  posX: 50,
-  posY: 50,
-  textColor: '#FFFFFF',
-};
 
 export type DayType = 'future' | 'past' | 'today';
 
