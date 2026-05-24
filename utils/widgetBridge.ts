@@ -18,6 +18,7 @@ export function syncWidget(event: CountdownEvent | null, widgetId?: number): voi
         label: 'PIN AN EVENT',
         color: '#7A8A9E',
         bgImage: '',
+        targetDate: '',
         targetWidgetId: widgetId ?? -1,
       });
       return;
@@ -56,6 +57,7 @@ export function syncWidget(event: CountdownEvent | null, widgetId?: number): voi
       color,
       eventId: event.id,
       bgImage: event.widgetImageUri || event.imageUri || '',
+      targetDate: event.targetDate,
       targetWidgetId: widgetId ?? -1,
     });
   } catch (error) {

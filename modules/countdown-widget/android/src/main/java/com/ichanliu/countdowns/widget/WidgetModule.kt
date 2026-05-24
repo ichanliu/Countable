@@ -49,6 +49,7 @@ class WidgetModule(reactContext: ReactApplicationContext) :
         val color = data.getString("color") ?: "#5B9EFF"
         val eventId = data.getString("eventId") ?: ""
         val bgImage = data.getString("bgImage") ?: ""
+        val targetDate = data.getString("targetDate") ?: ""
         val targetWidgetId = if (data.hasKey("targetWidgetId")) data.getInt("targetWidgetId") else -1
 
         val prefs = context.getSharedPreferences(CountdownWidget.PREFS_NAME, Context.MODE_PRIVATE)
@@ -68,6 +69,7 @@ class WidgetModule(reactContext: ReactApplicationContext) :
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_COLOR, color)
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_EVENT_ID, eventId)
             CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_BG_IMAGE, bgImage)
+            CountdownWidget.putWidgetPref(editor, widgetId, CountdownWidget.KEY_TARGET_DATE, targetDate)
             editor.apply()
             CountdownWidget.updateAppWidget(context, manager, widgetId)
         }

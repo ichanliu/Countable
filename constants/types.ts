@@ -12,15 +12,15 @@ export interface CountdownEvent {
 
 export interface HeroSettings {
   fontSize: number;
-  verticalPosition: number; // 0 (top) to 100 (bottom), 50 = center
-  horizontalPosition: number; // 0 (left) to 100 (right), 50 = center
+  posX: number; // 0 (left) to 100 (right), 50 = center
+  posY: number; // 0 (top) to 100 (bottom), 50 = center
   textColor: string;
 }
 
 export const DEFAULT_HERO: HeroSettings = {
-  fontSize: 96,
-  verticalPosition: 50,
-  horizontalPosition: 50,
+  fontSize: 64,
+  posX: 50,
+  posY: 50,
   textColor: '#FFFFFF',
 };
 
