@@ -20,7 +20,7 @@ import * as FileSystem from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, Gradients, InterWeights } from '../constants/theme';
 import { useEvents } from '../context/EventsContext';
-import { getDayType, getDayDiff } from '../constants/types';
+import { getDayType, getDayDiff, formatDate } from '../constants/types';
 import CalendarPicker from '../components/CalendarPicker';
 
 export default function EventDetailScreen() {
@@ -32,7 +32,110 @@ export default function EventDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const pageHeight = screenHeight;
 
-  
+  const [showTargetPicker, setShowTargetPicker] = useState(false);
+  const [showCreatedPicker, setShowCreatedPicker] = useState(false);
+
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.back();
+  }, []);
+
+  const handlePickImage = useCallback(async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission required', 'Allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: true,
+    });
+    if (!result.canceled && result.assets[0] && event) {
+      const uri = result.assets[0].uri;
+      // Copy to persistent storage
+      const dest = FileSystem.documentDirectory + `event_bg_${event.id}.jpg`;
+      await FileSystem.copyAsync({ from: uri, to: dest });
+      updateEvent({ ...event, bgImageUri: dest });
+    }
+  }, [event, updateEvent]);
+
+  const handleTargetDateChange = useCallback((date: Date) => {
+    if (!event) return;
+    const iso = date.toISOString().split('T')[0];
+    updateEvent({ ...event, targetDate: iso });
+    setShowTargetPicker(false);
+  }, [event, updateEvent]);
+
+  const handleCreatedDateChange = useCallback((date: Date) => {
+    if (!event) return;
+    const iso = date.toISOString().split('T')[0];
+    updateEvent({ ...event, createdAt: iso });
+    setShowCreatedPicker(false);
+  }, [event, updateEvent]);
+
+  const { dayType, dayColor, absDiff, dayLabel, bgGradient, ringProgress } = useMemo(() => {
+    if (!event) {
+      return {
+        dayType: 'future' as const,
+        dayColor: Colors.countdown,
+        absDiff: 0,
+        dayLabel: '',
+        bgGradient: Gradients.future,
+        ringProgress: 0,
+      };
+    }
+    const dt = getDayType(event.targetDate);
+    const diff = getDayDiff(event.targetDate);
+    const abs = Math.abs(diff);
+
+    let color: string;
+    let label: string;
+    let grad: readonly string[];
+
+    switch (dt) {
+      case 'today':
+        color = Colors.today;
+        label = 'TODAY';
+        grad = Gradients.today;
+        break;
+      case 'future':
+        color = Colors.countdown;
+        label = 'DAYS LEFT';
+        grad = Gradients.future;
+        break;
+      case 'past':
+        color = Colors.countup;
+        label = 'DAYS PASSED';
+        grad = Gradients.past;
+        break;
+      default:
+        color = Colors.countdown;
+        label = '';
+        grad = Gradients.future;
+    }
+
+    // Progress: elapsed / total duration from createdAt to targetDate
+    let progress = 0;
+    if (dt !== 'past') {
+      const createdTime = new Date(event.createdAt).getTime();
+      const targetTime = new Date(event.targetDate).getTime();
+      const nowTime = Date.now();
+      const total = targetTime - createdTime;
+      if (total > 0) {
+        progress = Math.min(1, Math.max(0, (nowTime - createdTime) / total));
+      }
+    }
+
+    return {
+      dayType: dt,
+      dayColor: color,
+      absDiff: abs,
+      dayLabel: label,
+      bgGradient: grad,
+      ringProgress: progress,
+    };
+  }, [event]);
 
   if (!event) {
     return (
@@ -87,27 +190,32 @@ export default function EventDetailScreen() {
               style={StyleSheet.absoluteFill}
             />
           )}
-          <View style={{ flex: 1, paddingTop: (pageHeight - 120) * 50 / 100, alignItems: 'center' }}>
+          <View style={{ flex: 1, paddingTop: (pageHeight - 120) * 0.5, alignItems: 'center' }}>
             <View style={styles.heroContent}>
-              <Text style={[styles.heroNumber, { fontSize: 96, color: dayColor }]}>
+              <Text style={[styles.heroNumber, { color: dayColor }]}>
                 {dayType === 'today' ? '🎉' : absDiff}
               </Text>
               {dayLabel ? (
                 <Text style={[styles.heroLabel, { color: dayColor }]}>{dayLabel}</Text>
               ) : null}
-              <Text style={[styles.heroTitle, { color: dayColor }]}>{event.title}</Text>
+              <Text style={[styles.heroTitle, { color: '#fff' }]}>{event.title}</Text>
             </View>
           </View>
         </View>
 
-        {/* Page 2: Bottom section */}
+        {/* Page 2: Detail section */}
         <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 20 }]}>
-          {/* Spacer */}
           <View style={{ height: 20 }} />
+
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
               <View style={styles.progressBarWrap}>
-                <View style={[styles.progressBarFill, { width: `${Math.round(ringProgress * 100)}%`, backgroundColor: dayColor }]} />
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${Math.round(ringProgress * 100)}%`, backgroundColor: dayColor },
+                  ]}
+                />
               </View>
               <View style={styles.ringCenter}>
                 <Text style={[styles.ringPercent, { color: dayColor }]}>
@@ -118,21 +226,17 @@ export default function EventDetailScreen() {
             </View>
           )}
 
-          {/* Image edit */}
+          {/* Background Image */}
           <View style={styles.editSection}>
             <View style={styles.editRow}>
               <Ionicons name="image-outline" size={18} color={Colors.mutedForeground} />
               <Text style={styles.editLabel}>Background Image</Text>
             </View>
             <Pressable style={styles.editActionBtn} onPress={handlePickImage}>
-              <Ionicons name={event.imageUri ? "swap-horizontal" : "add"} size={16} color={Colors.primary} />
-              <Text style={styles.editActionText}>{event.imageUri ? 'Change' : 'Add Image'}</Text>
+              <Ionicons name={event.bgImageUri ? 'swap-horizontal' : 'add'} size={16} color={Colors.primary} />
+              <Text style={styles.editActionText}>{event.bgImageUri ? 'Change' : 'Add Image'}</Text>
             </Pressable>
           </View>
-
-          {/* Widget image edit */}
-          <View style={styles.editSection}>
-            
 
           {/* Target date */}
           <View style={styles.editSection}>
@@ -158,7 +262,7 @@ export default function EventDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Calendar modal - avoids paging scroll conflict */}
+      {/* Calendar modal — target date */}
       <Modal visible={showTargetPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTargetPicker(false)} />
@@ -171,6 +275,7 @@ export default function EventDetailScreen() {
         </View>
       </Modal>
 
+      {/* Calendar modal — created date */}
       <Modal visible={showCreatedPicker} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreatedPicker(false)} />
