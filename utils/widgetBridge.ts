@@ -56,7 +56,7 @@ export function syncWidget(event: CountdownEvent | null, widgetId?: number): voi
       label,
       color,
       eventId: event.id,
-      bgImage: event.widgetImageUri || event.imageUri || '',
+      bgImage: event.widgetImageUri || event.bgImageUri || event.imageUri || '',
       targetDate: event.targetDate,
       targetWidgetId: widgetId ?? -1,
     });

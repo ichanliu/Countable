@@ -56,21 +56,21 @@ export default function EventDetailScreen() {
       // Copy to persistent storage
       const dest = FileSystem.documentDirectory + `event_bg_${event.id}.jpg`;
       await FileSystem.copyAsync({ from: uri, to: dest });
-      updateEvent({ ...event, bgImageUri: dest });
+      updateEvent(event.id, { bgImageUri: dest });
     }
   }, [event, updateEvent]);
 
   const handleTargetDateChange = useCallback((date: Date) => {
     if (!event) return;
     const iso = date.toISOString().split('T')[0];
-    updateEvent({ ...event, targetDate: iso });
+    updateEvent(event.id, { targetDate: iso });
     setShowTargetPicker(false);
   }, [event, updateEvent]);
 
   const handleCreatedDateChange = useCallback((date: Date) => {
     if (!event) return;
     const iso = date.toISOString().split('T')[0];
-    updateEvent({ ...event, createdAt: iso });
+    updateEvent(event.id, { createdAt: iso });
     setShowCreatedPicker(false);
   }, [event, updateEvent]);
 
