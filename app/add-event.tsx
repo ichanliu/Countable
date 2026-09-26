@@ -81,7 +81,7 @@ export default function AddEventScreen() {
       ? [16, 9] as [number, number]
       : prefix === 'event-detail'
         ? [9, 16] as [number, number]
-        : undefined;
+        : [1, 1] as [number, number];
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.8,
@@ -260,6 +260,7 @@ export default function AddEventScreen() {
             title="Home-screen widget"
             hint="Background shown on widgets linked to this event"
             uri={widgetImageUri}
+            squarePreview
             onPick={() => handlePickImage(setWidgetImageUri, 'event-widget')}
             onRemove={() => handleRemoveImage(setWidgetImageUri)}
           />
@@ -304,12 +305,14 @@ function EventImageField({
   title,
   hint,
   uri,
+  squarePreview = false,
   onPick,
   onRemove,
 }: {
   title: string;
   hint: string;
   uri?: string;
+  squarePreview?: boolean;
   onPick: () => void;
   onRemove: () => void;
 }) {
@@ -320,8 +323,12 @@ function EventImageField({
         <Text style={styles.imagePickerHint}>{hint}</Text>
       </View>
       {uri ? (
-        <View style={styles.imagePreviewContainer}>
-          <Image source={{ uri }} style={styles.imagePreview} resizeMode="cover" />
+        <View style={[styles.imagePreviewContainer, squarePreview && styles.squareImagePreviewContainer]}>
+          <Image
+            source={{ uri }}
+            style={[styles.imagePreview, squarePreview && styles.squareImagePreview]}
+            resizeMode="cover"
+          />
           <Pressable style={styles.removeImageBtn} onPress={onRemove}>
             <Ionicons name="close-circle" size={26} color="#fff" />
           </Pressable>
@@ -454,10 +461,18 @@ const styles = StyleSheet.create({
     borderRadius: Radius.badge,
     overflow: 'hidden',
   },
+  squareImagePreviewContainer: {
+    width: 160,
+    height: 160,
+  },
   imagePreview: {
     width: '100%',
     height: 160,
     borderRadius: Radius.badge,
+  },
+  squareImagePreview: {
+    width: 160,
+    height: 160,
   },
   removeImageBtn: {
     position: 'absolute',

@@ -6,14 +6,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Shader
-import android.graphics.BitmapShader
 import android.net.Uri
 import android.widget.RemoteViews
 import java.util.Calendar
@@ -58,21 +52,6 @@ class CountdownWidget : AppWidgetProvider() {
         fun getWidgetPref(prefs: SharedPreferences, wid: Int, key: String): String? {
             val wk = getWidgetKey(wid, key)
             return prefs.getString(wk, null) ?: prefs.getString(key, null)
-        }
-
-        private fun roundedBitmap(bitmap: Bitmap, radius: Float): Bitmap {
-            val result = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(result)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-            }
-            canvas.drawRoundRect(
-                RectF(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat()),
-                radius,
-                radius,
-                paint
-            )
-            return result
         }
 
         private fun decodeBackground(context: Context, uri: String, options: BitmapFactory.Options): Bitmap? {
@@ -131,24 +110,23 @@ class CountdownWidget : AppWidgetProvider() {
             // Background
             if (bgImage.isNotEmpty()) {
                 try {
-                    val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                    val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
                     val bmp = decodeBackground(context, bgImage, opts)
                     if (bmp != null) {
                         views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
-                        views.setImageViewBitmap(
-                            R.id.widget_bg_image,
-                            roundedBitmap(bmp, 48f)
-                        )
+                        views.setImageViewBitmap(R.id.widget_bg_image, bmp)
+                        views.setViewVisibility(R.id.widget_image_scrim, android.view.View.VISIBLE)
                     } else throw Exception("null bitmap")
                 } catch (_: Exception) {
                     views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
+                    views.setViewVisibility(R.id.widget_image_scrim, android.view.View.GONE)
                 }
             } else {
                 views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_image_scrim, android.view.View.GONE)
             }
-            // Keep the widget surface rounded. The image bitmap is rounded separately
-            // because RemoteViews cannot clip child views to the root outline.
             views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_bg)
+            views.setBoolean(R.id.widget_root, "setClipToOutline", true)
 
             // Text content
             if (title != null) {
