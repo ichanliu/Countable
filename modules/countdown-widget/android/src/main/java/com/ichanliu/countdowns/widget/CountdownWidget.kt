@@ -174,8 +174,12 @@ class CountdownWidget : AppWidgetProvider() {
                         ?: options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
                             .takeIf { it > 0 }
                         ?: 180
-                    val targetWidth = (widthDp * density).toInt().coerceIn(1, 384)
-                    val targetHeight = (heightDp * density).toInt().coerceIn(1, 384)
+                    val bitmapScale = minOf(
+                        1f,
+                        384f / maxOf(widthDp * density, heightDp * density)
+                    )
+                    val targetWidth = (widthDp * density * bitmapScale).toInt().coerceAtLeast(1)
+                    val targetHeight = (heightDp * density * bitmapScale).toInt().coerceAtLeast(1)
                     val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
                     val bmp = decodeBackground(context, bgImage, opts)
                     if (bmp != null) {
@@ -186,7 +190,7 @@ class CountdownWidget : AppWidgetProvider() {
                                 bmp,
                                 targetWidth,
                                 targetHeight,
-                                16f * density
+                                22f * density * bitmapScale
                             )
                         )
                     } else throw Exception("null bitmap")
