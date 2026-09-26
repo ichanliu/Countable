@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export async function persistEventImage(uri: string, name: string): Promise<string> {
   if (Platform.OS === 'web') return uri;
