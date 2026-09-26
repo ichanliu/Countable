@@ -8,7 +8,14 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
 import android.net.Uri
 import android.widget.RemoteViews
 import java.util.Calendar
@@ -53,6 +60,50 @@ class CountdownWidget : AppWidgetProvider() {
         fun getWidgetPref(prefs: SharedPreferences, wid: Int, key: String): String? {
             val wk = getWidgetKey(wid, key)
             return prefs.getString(wk, null) ?: prefs.getString(key, null)
+        }
+
+        private fun renderWidgetBackground(
+            source: Bitmap,
+            width: Int,
+            height: Int,
+            cornerRadius: Float
+        ): Bitmap {
+            val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
+            val scale = maxOf(width.toFloat() / source.width, height.toFloat() / source.height)
+            val matrix = Matrix().apply {
+                setScale(scale, scale)
+                postTranslate(
+                    (width - source.width * scale) / 2f,
+                    (height - source.height * scale) / 2f
+                )
+            }
+            val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
+            val radius = cornerRadius.coerceAtMost(minOf(width, height) / 2f)
+            val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).also {
+                    it.setLocalMatrix(matrix)
+                }
+            }
+            canvas.drawRoundRect(bounds, radius, radius, imagePaint)
+
+            val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(
+                    0f,
+                    0f,
+                    0f,
+                    height.toFloat(),
+                    intArrayOf(
+                        Color.argb(38, 0, 0, 0),
+                        Color.argb(51, 0, 0, 0),
+                        Color.argb(179, 0, 0, 0)
+                    ),
+                    floatArrayOf(0f, 0.5f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawRoundRect(bounds, radius, radius, scrimPaint)
+            return output
         }
 
         private fun decodeBackground(context: Context, uri: String, options: BitmapFactory.Options): Bitmap? {
@@ -111,23 +162,41 @@ class CountdownWidget : AppWidgetProvider() {
             // Background
             if (bgImage.isNotEmpty()) {
                 try {
+                    val options = awm.getAppWidgetOptions(wid)
+                    val density = context.resources.displayMetrics.density
+                    val widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                        .takeIf { it > 0 }
+                        ?: options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+                            .takeIf { it > 0 }
+                        ?: 180
+                    val heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+                        .takeIf { it > 0 }
+                        ?: options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                            .takeIf { it > 0 }
+                        ?: 180
+                    val targetWidth = (widthDp * density).toInt().coerceIn(1, 384)
+                    val targetHeight = (heightDp * density).toInt().coerceIn(1, 384)
                     val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
                     val bmp = decodeBackground(context, bgImage, opts)
                     if (bmp != null) {
                         views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
-                        views.setImageViewBitmap(R.id.widget_bg_image, bmp)
-                        views.setViewVisibility(R.id.widget_image_scrim, android.view.View.VISIBLE)
+                        views.setImageViewBitmap(
+                            R.id.widget_bg_image,
+                            renderWidgetBackground(
+                                bmp,
+                                targetWidth,
+                                targetHeight,
+                                16f * density
+                            )
+                        )
                     } else throw Exception("null bitmap")
                 } catch (_: Exception) {
                     views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
-                    views.setViewVisibility(R.id.widget_image_scrim, android.view.View.GONE)
                 }
             } else {
                 views.setViewVisibility(R.id.widget_bg_image, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_image_scrim, android.view.View.GONE)
             }
             views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_bg)
-            views.setBoolean(R.id.widget_root, "setClipToOutline", true)
 
             // Text content
             if (title != null) {
