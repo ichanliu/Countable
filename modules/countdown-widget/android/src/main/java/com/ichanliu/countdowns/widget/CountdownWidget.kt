@@ -190,7 +190,7 @@ class CountdownWidget : AppWidgetProvider() {
                                 bmp,
                                 targetWidth,
                                 targetHeight,
-                                22f * density * bitmapScale
+                                24f * density * bitmapScale
                             )
                         )
                     } else throw Exception("null bitmap")
