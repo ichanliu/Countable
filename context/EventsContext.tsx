@@ -112,7 +112,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       targetDate: e.targetDate || new Date().toISOString(),
       imageUri: e.imageUri || undefined,
       bgImageUri: e.bgImageUri || undefined,
-      widgetImageUri: e.widgetImageUri || undefined,
+      widgetImageUri: typeof e.widgetImageUri === 'string' ? e.widgetImageUri : undefined,
       isPinned: !!e.isPinned,
       createdAt: e.createdAt || new Date().toISOString(),
     }));

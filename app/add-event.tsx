@@ -8,19 +8,18 @@ import {
   StyleSheet,
   Image,
   Alert,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useEvents } from '../context/EventsContext';
-import { CountdownEvent, getDayType, getDayDiff, generateId, formatDate } from '../constants/types';
+import { CountdownEvent, getDayDiff, generateId, formatDate, formatLocalDate, parseEventDate } from '../constants/types';
 import CalendarPicker from '../components/CalendarPicker';
+import { persistEventImage } from '../utils/imageStorage';
 
 export default function AddEventScreen() {
   const insets = useSafeAreaInsets();
@@ -34,10 +33,16 @@ export default function AddEventScreen() {
 
   const [title, setTitle] = useState(existingEvent?.title || '');
   const [targetDate, setTargetDate] = useState(
-    existingEvent ? new Date(existingEvent.targetDate) : new Date()
+    existingEvent ? parseEventDate(existingEvent.targetDate) : new Date()
   );
   const [imageUri, setImageUri] = useState<string | undefined>(
     existingEvent?.imageUri
+  );
+  const [bgImageUri, setBgImageUri] = useState<string | undefined>(
+    existingEvent?.bgImageUri
+  );
+  const [widgetImageUri, setWidgetImageUri] = useState<string | undefined>(
+    existingEvent?.widgetImageUri ?? existingEvent?.imageUri
   );
   const [isSaving, setIsSaving] = useState(false);
   const [titleError, setTitleError] = useState(false);
@@ -53,8 +58,7 @@ export default function AddEventScreen() {
     };
   }, []);
 
-  const dayType = getDayType(targetDate.toISOString());
-  const diff = getDayDiff(targetDate.toISOString());
+  const diff = getDayDiff(targetDate);
 
   const diffChip =
     diff === 0
@@ -63,56 +67,44 @@ export default function AddEventScreen() {
       ? { text: `${diff} days from now`, color: Colors.countdown }
       : { text: `${Math.abs(diff)} days ago`, color: Colors.countup };
 
-  const handlePickImage = useCallback(async () => {
+  const handlePickImage = useCallback(async (
+    setImage: React.Dispatch<React.SetStateAction<string | undefined>>,
+    prefix: string
+  ) => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert('Permission required', 'Allow access to your photo library to select a background image.');
       return;
     }
 
+    const aspect = prefix === 'event-card'
+      ? [16, 9] as [number, number]
+      : prefix === 'event-detail'
+        ? [9, 16] as [number, number]
+        : undefined;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      aspect: [16, 9],
       quality: 0.8,
       allowsEditing: true,
+      ...(aspect ? { aspect } : {}),
     });
 
     if (!result.canceled && result.assets[0]) {
-      const pickedUri = result.assets[0].uri;
-
-      if (Platform.OS !== 'web') {
-        // Copy to persistent storage
-        const filename = `event_img_${Date.now()}.jpg`;
-        const dest = FileSystem.documentDirectory + filename;
-
-        // Delete old image if replacing
-        if (imageUri && imageUri !== existingEvent?.imageUri) {
-          try {
-            await FileSystem.deleteAsync(imageUri, { idempotent: true });
-          } catch {}
-        }
-
-        try {
-          await FileSystem.copyAsync({ from: pickedUri, to: dest });
-          setImageUri(dest);
-        } catch {
-          // Fall back to original URI
-          setImageUri(pickedUri);
-        }
-      } else {
-        setImageUri(pickedUri);
+      try {
+        const storedUri = await persistEventImage(result.assets[0].uri, prefix);
+        setImage(storedUri);
+      } catch (error) {
+        Alert.alert(
+          'Image could not be saved',
+          error instanceof Error ? error.message : 'Please try selecting the image again.'
+        );
       }
     }
-  }, [imageUri, existingEvent]);
+  }, []);
 
-  const handleRemoveImage = useCallback(async () => {
-    if (imageUri && Platform.OS !== 'web') {
-      try {
-        await FileSystem.deleteAsync(imageUri, { idempotent: true });
-      } catch {}
-    }
-    setImageUri(undefined);
-  }, [imageUri]);
+  const handleRemoveImage = useCallback((
+    setImage: React.Dispatch<React.SetStateAction<string | undefined>>
+  ) => setImage(undefined), []);
 
   const handleSave = useCallback(async () => {
     const trimmed = title.trim();
@@ -125,23 +117,21 @@ export default function AddEventScreen() {
     setIsSaving(true);
     try {
       if (isEdit && existingEvent) {
-        // Handle image deletion if changed
-        if (existingEvent.imageUri && existingEvent.imageUri !== imageUri) {
-          try {
-            await FileSystem.deleteAsync(existingEvent.imageUri, { idempotent: true });
-          } catch {}
-        }
         await updateEvent(existingEvent.id, {
           title: trimmed,
-          targetDate: targetDate.toISOString(),
+          targetDate: formatLocalDate(targetDate),
           imageUri,
+          bgImageUri,
+          widgetImageUri: widgetImageUri ?? '',
         });
       } else {
         const newEvent: CountdownEvent = {
           id: generateId(),
           title: trimmed,
-          targetDate: targetDate.toISOString(),
+          targetDate: formatLocalDate(targetDate),
           imageUri,
+          bgImageUri,
+          widgetImageUri: widgetImageUri ?? '',
           isPinned: false,
           createdAt: new Date().toISOString(),
         };
@@ -154,7 +144,7 @@ export default function AddEventScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [title, targetDate, imageUri, isEdit, existingEvent, addEvent, updateEvent]);
+  }, [title, targetDate, imageUri, bgImageUri, widgetImageUri, isEdit, existingEvent, addEvent, updateEvent]);
 
   const handleDeletePress = useCallback(() => {
     if (deleteState === 'idle') {
@@ -170,9 +160,6 @@ export default function AddEventScreen() {
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       if (existingEvent) {
-        if (existingEvent.imageUri) {
-          FileSystem.deleteAsync(existingEvent.imageUri, { idempotent: true }).catch(() => {});
-        }
         deleteEvent(existingEvent.id);
       }
       router.back();
@@ -252,36 +239,30 @@ export default function AddEventScreen() {
           />
         </View>
 
-        {/* Section 3: Background Image */}
+        {/* Section 3: Independent images */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>BACKGROUND IMAGE</Text>
-          {imageUri ? (
-            <View style={styles.imagePreviewContainer}>
-              <Image
-                source={{ uri: imageUri }}
-                style={styles.imagePreview}
-                resizeMode="cover"
-              />
-              <Pressable
-                style={styles.removeImageBtn}
-                onPress={handleRemoveImage}
-              >
-                <Ionicons name="close-circle" size={26} color="#fff" />
-              </Pressable>
-              <Pressable style={styles.changeImageBtn} onPress={handlePickImage}>
-                <Ionicons name="swap-horizontal" size={16} color="#fff" />
-                <Text style={styles.changeImageText}>Change</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable style={styles.imagePickerBox} onPress={handlePickImage}>
-              <Ionicons name="image-outline" size={30} color={Colors.mutedForeground} />
-              <Text style={styles.imagePickerTitle}>Choose from Gallery</Text>
-              <Text style={styles.imagePickerHint}>
-                Optional — adds a custom card background
-              </Text>
-            </Pressable>
-          )}
+          <Text style={styles.sectionLabel}>EVENT IMAGES</Text>
+          <EventImageField
+            title="Home card"
+            hint="Horizontal image shown in the event list"
+            uri={imageUri}
+            onPick={() => handlePickImage(setImageUri, 'event-card')}
+            onRemove={() => handleRemoveImage(setImageUri)}
+          />
+          <EventImageField
+            title="Full-screen detail"
+            hint="Background shown when you open this event"
+            uri={bgImageUri}
+            onPick={() => handlePickImage(setBgImageUri, 'event-detail')}
+            onRemove={() => handleRemoveImage(setBgImageUri)}
+          />
+          <EventImageField
+            title="Home-screen widget"
+            hint="Background shown on widgets linked to this event"
+            uri={widgetImageUri}
+            onPick={() => handlePickImage(setWidgetImageUri, 'event-widget')}
+            onRemove={() => handleRemoveImage(setWidgetImageUri)}
+          />
         </View>
 
         {/* Delete button (Edit mode only) */}
@@ -315,6 +296,46 @@ export default function AddEventScreen() {
           </Pressable>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function EventImageField({
+  title,
+  hint,
+  uri,
+  onPick,
+  onRemove,
+}: {
+  title: string;
+  hint: string;
+  uri?: string;
+  onPick: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View style={styles.eventImageField}>
+      <View style={styles.imageFieldHeading}>
+        <Text style={styles.imagePickerTitle}>{title}</Text>
+        <Text style={styles.imagePickerHint}>{hint}</Text>
+      </View>
+      {uri ? (
+        <View style={styles.imagePreviewContainer}>
+          <Image source={{ uri }} style={styles.imagePreview} resizeMode="cover" />
+          <Pressable style={styles.removeImageBtn} onPress={onRemove}>
+            <Ionicons name="close-circle" size={26} color="#fff" />
+          </Pressable>
+          <Pressable style={styles.changeImageBtn} onPress={onPick}>
+            <Ionicons name="swap-horizontal" size={16} color="#fff" />
+            <Text style={styles.changeImageText}>Change</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable style={styles.imagePickerBox} onPress={onPick}>
+          <Ionicons name="image-outline" size={24} color={Colors.mutedForeground} />
+          <Text style={styles.imagePickerHint}>Choose from Gallery</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -410,6 +431,12 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     alignItems: 'center',
     gap: 8,
+  },
+  eventImageField: {
+    gap: 8,
+  },
+  imageFieldHeading: {
+    gap: 3,
   },
   imagePickerTitle: {
     fontSize: 15,

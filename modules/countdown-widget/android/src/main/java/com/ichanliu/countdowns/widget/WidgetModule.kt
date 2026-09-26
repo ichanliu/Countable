@@ -55,10 +55,10 @@ class WidgetModule(reactContext: ReactApplicationContext) :
         val prefs = context.getSharedPreferences(CountdownWidget.PREFS_NAME, Context.MODE_PRIVATE)
 
         // Determine which widgets to update
-        val idsToUpdate = if (targetWidgetId >= 0 && allWidgetIds.any { it == targetWidgetId }) {
-            intArrayOf(targetWidgetId)
-        } else {
-            allWidgetIds
+        val idsToUpdate = when {
+            targetWidgetId < 0 -> allWidgetIds
+            allWidgetIds.any { it == targetWidgetId } -> intArrayOf(targetWidgetId)
+            else -> intArrayOf()
         }
 
         for (widgetId in idsToUpdate) {

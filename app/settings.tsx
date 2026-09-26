@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +23,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useSettings } from '../context/SettingsContext';
 import { useEvents } from '../context/EventsContext';
+import { formatDate } from '../constants/types';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -33,9 +34,9 @@ export default function SettingsScreen() {
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [pickingWidgetId, setPickingWidgetId] = useState<number | null>(null);
 
-  const handleBindWidget = useCallback((widgetId: number, eventId: string) => {
+  const handleBindWidget = useCallback(async (widgetId: number, eventId: string) => {
     const { bindWidget, syncWidget } = require('../utils/widgetBridge');
-    bindWidget(widgetId, eventId);
+    await bindWidget(widgetId, eventId);
     const event = events.find((e) => e.id === eventId);
     syncWidget(event || null, widgetId);
     setWidgetBindings((prev) => ({ ...prev, [widgetId]: eventId }));
@@ -44,19 +45,24 @@ export default function SettingsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [events]);
 
-  // Fetch widget info on mount
-  useEffect(() => {
+  // Refresh widget IDs and bindings whenever Settings comes into focus.
+  useFocusEffect(useCallback(() => {
+    let active = true;
     (async () => {
       const { getWidgetIds, getWidgetEventId } = require('../utils/widgetBridge');
       const ids = await getWidgetIds();
+      if (!active) return;
       setWidgetIds(ids);
       const bindings: Record<number, string> = {};
       for (const id of ids) {
         bindings[id] = await getWidgetEventId(id);
       }
-      setWidgetBindings(bindings);
+      if (active) setWidgetBindings(bindings);
     })();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, []));
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -252,11 +258,15 @@ export default function SettingsScreen() {
                   <Pressable
                     key={ev.id}
                     style={styles.modalItem}
-                    onPress={() => pickingWidgetId !== null && handleBindWidget(pickingWidgetId, ev.id)}
+                    onPress={() => {
+                      if (pickingWidgetId !== null) {
+                        void handleBindWidget(pickingWidgetId, ev.id);
+                      }
+                    }}
                   >
                     <View>
                       <Text style={styles.modalItemTitle}>{ev.title}</Text>
-                      <Text style={styles.modalItemDate}>{new Date(ev.targetDate).toLocaleDateString()}</Text>
+                      <Text style={styles.modalItemDate}>{formatDate(ev.targetDate)}</Text>
                     </View>
                     {widgetBindings[pickingWidgetId || 0] === ev.id && (
                       <Ionicons name="checkmark" size={18} color={Colors.primary} />

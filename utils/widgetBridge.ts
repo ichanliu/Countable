@@ -1,12 +1,12 @@
 import { NativeModules, Platform } from 'react-native';
-import { getDayType, getDayDiff } from '../constants/types';
+import { formatLocalDate, getDayType, getDayDiff, parseEventDate } from '../constants/types';
 import type { CountdownEvent } from '../constants/types';
 
 const WidgetModule = Platform.OS === 'android'
   ? NativeModules.CountdownWidgetModule
   : null;
 
-// Sync a single event to ALL active widgets (or to a specific widget if widgetId provided)
+// Sync an event to one widget instance, or all instances when no ID is supplied.
 export function syncWidget(event: CountdownEvent | null, widgetId?: number): void {
   if (Platform.OS !== 'android' || !WidgetModule) return;
 
@@ -56,8 +56,10 @@ export function syncWidget(event: CountdownEvent | null, widgetId?: number): voi
       label,
       color,
       eventId: event.id,
-      bgImage: event.widgetImageUri || event.bgImageUri || event.imageUri || '',
-      targetDate: event.targetDate,
+      bgImage: event.widgetImageUri !== undefined
+        ? event.widgetImageUri
+        : event.imageUri || '',
+      targetDate: formatLocalDate(parseEventDate(event.targetDate)),
       targetWidgetId: widgetId ?? -1,
     });
   } catch (error) {

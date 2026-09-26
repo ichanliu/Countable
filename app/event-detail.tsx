@@ -16,12 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, Gradients, InterWeights } from '../constants/theme';
 import { useEvents } from '../context/EventsContext';
-import { getDayType, getDayDiff, formatDate } from '../constants/types';
+import { getDayType, getDayDiff, formatDate, formatLocalDate, parseEventDate } from '../constants/types';
 import CalendarPicker from '../components/CalendarPicker';
+import { persistEventImage } from '../utils/imageStorage';
 
 export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -53,23 +53,28 @@ export default function EventDetailScreen() {
     });
     if (!result.canceled && result.assets[0] && event) {
       const uri = result.assets[0].uri;
-      // Copy to persistent storage
-      const dest = FileSystem.documentDirectory + `event_bg_${event.id}.jpg`;
-      await FileSystem.copyAsync({ from: uri, to: dest });
-      updateEvent(event.id, { bgImageUri: dest });
+      try {
+        const dest = await persistEventImage(uri, 'event-detail');
+        updateEvent(event.id, { bgImageUri: dest });
+      } catch (error) {
+        Alert.alert(
+          'Image could not be saved',
+          error instanceof Error ? error.message : 'Please try selecting the image again.'
+        );
+      }
     }
   }, [event, updateEvent]);
 
   const handleTargetDateChange = useCallback((date: Date) => {
     if (!event) return;
-    const iso = date.toISOString().split('T')[0];
+    const iso = formatLocalDate(date);
     updateEvent(event.id, { targetDate: iso });
     setShowTargetPicker(false);
   }, [event, updateEvent]);
 
   const handleCreatedDateChange = useCallback((date: Date) => {
     if (!event) return;
-    const iso = date.toISOString().split('T')[0];
+    const iso = formatLocalDate(date);
     updateEvent(event.id, { createdAt: iso });
     setShowCreatedPicker(false);
   }, [event, updateEvent]);
@@ -118,8 +123,8 @@ export default function EventDetailScreen() {
     // Progress: elapsed / total duration from createdAt to targetDate
     let progress = 0;
     if (dt !== 'past') {
-      const createdTime = new Date(event.createdAt).getTime();
-      const targetTime = new Date(event.targetDate).getTime();
+      const createdTime = parseEventDate(event.createdAt).getTime();
+      const targetTime = parseEventDate(event.targetDate).getTime();
       const nowTime = Date.now();
       const total = targetTime - createdTime;
       if (total > 0) {
@@ -151,16 +156,9 @@ export default function EventDetailScreen() {
     );
   }
 
-  const createdDate = new Date(event.createdAt);
-
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-
-      {/* Back button */}
-      <Pressable onPress={handleBack} style={[styles.backBtn, { top: insets.top + 8 }]}>
-        <Ionicons name="chevron-back" size={28} color="#fff" />
-      </Pressable>
 
       <ScrollView
         ref={scrollRef}
@@ -172,6 +170,9 @@ export default function EventDetailScreen() {
       >
         {/* Page 1: Hero section */}
         <View style={{ height: pageHeight }}>
+          <Pressable onPress={handleBack} style={[styles.backBtn, { top: insets.top + 8 }]}>
+            <Ionicons name="chevron-back" size={28} color="#fff" />
+          </Pressable>
           {event.bgImageUri ? (
             <ImageBackground
               source={{ uri: event.bgImageUri }}
@@ -268,7 +269,7 @@ export default function EventDetailScreen() {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTargetPicker(false)} />
           <Pressable style={styles.modalContent}>
             <CalendarPicker
-              selectedDate={new Date(event.targetDate)}
+              selectedDate={parseEventDate(event.targetDate)}
               onDateChange={handleTargetDateChange}
             />
           </Pressable>
@@ -281,7 +282,7 @@ export default function EventDetailScreen() {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreatedPicker(false)} />
           <Pressable style={styles.modalContent}>
             <CalendarPicker
-              selectedDate={createdDate}
+              selectedDate={parseEventDate(event.createdAt)}
               onDateChange={handleCreatedDateChange}
             />
           </Pressable>

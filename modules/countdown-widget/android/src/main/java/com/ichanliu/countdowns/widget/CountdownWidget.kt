@@ -17,6 +17,7 @@ import android.graphics.BitmapShader
 import android.net.Uri
 import android.widget.RemoteViews
 import java.util.Calendar
+import java.util.TimeZone
 
 class CountdownWidget : AppWidgetProvider() {
 
@@ -89,13 +90,19 @@ class CountdownWidget : AppWidgetProvider() {
         private fun calcDiff(targetDateStr: String): Pair<Int, String> {
             return try {
                 val d = targetDateStr.substring(0, 10).split("-")
-                val tgt = Calendar.getInstance().apply {
-                    set(d[0].toInt(), d[1].toInt() - 1, d[2].toInt(), 0, 0, 0)
-                    set(Calendar.MILLISECOND, 0)
+                val utc = TimeZone.getTimeZone("UTC")
+                val tgt = Calendar.getInstance(utc).apply {
+                    clear()
+                    set(d[0].toInt(), d[1].toInt() - 1, d[2].toInt())
                 }
-                val now = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                val localToday = Calendar.getInstance()
+                val now = Calendar.getInstance(utc).apply {
+                    clear()
+                    set(
+                        localToday.get(Calendar.YEAR),
+                        localToday.get(Calendar.MONTH),
+                        localToday.get(Calendar.DAY_OF_MONTH)
+                    )
                 }
                 val diff = ((tgt.timeInMillis - now.timeInMillis) / 86400000L).toInt()
                 when {
