@@ -48,6 +48,9 @@ class CountdownWidget : AppWidgetProvider() {
         const val KEY_COLOR = "event_color"
         const val KEY_EVENT_ID = "event_id"
         const val KEY_BG_IMAGE = "event_bg_image"
+        const val KEY_BG_IMAGE_FOCUS_X = "event_bg_image_focus_x"
+        const val KEY_BG_IMAGE_FOCUS_Y = "event_bg_image_focus_y"
+        const val KEY_BG_IMAGE_ZOOM = "event_bg_image_zoom"
         const val KEY_TARGET_DATE = "event_target_date"
         const val DEFAULT_BG = "#0F1520"
 
@@ -62,15 +65,26 @@ class CountdownWidget : AppWidgetProvider() {
 
         private fun renderWidgetBackground(
             source: Bitmap,
-            maxDimension: Int
+            maxDimension: Int,
+            targetRatio: Float,
+            focusX: Float,
+            focusY: Float,
+            zoom: Float
         ): Bitmap {
-            val scale = minOf(1f, maxDimension.toFloat() / maxOf(source.width, source.height))
-            val width = (source.width * scale).toInt().coerceAtLeast(1)
-            val height = (source.height * scale).toInt().coerceAtLeast(1)
+            val safeRatio = targetRatio.takeIf { it.isFinite() && it > 0f } ?: source.width.toFloat() / source.height
+            val outputSize = minOf(maxDimension.toFloat(), maxOf(source.width, source.height).toFloat())
+            val width = (outputSize * minOf(1f, safeRatio)).toInt().coerceAtLeast(1)
+            val height = (outputSize * minOf(1f, 1f / safeRatio)).toInt().coerceAtLeast(1)
             val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(output)
             val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
-            canvas.drawBitmap(source, null, bounds, Paint(Paint.FILTER_BITMAP_FLAG))
+            val imageScale = maxOf(width.toFloat() / source.width, height.toFloat() / source.height) * zoom
+            val scaledWidth = source.width * imageScale
+            val scaledHeight = source.height * imageScale
+            val left = (width / 2f - focusX * scaledWidth).coerceIn(width - scaledWidth, 0f)
+            val top = (height / 2f - focusY * scaledHeight).coerceIn(height - scaledHeight, 0f)
+            val imageBounds = RectF(left, top, left + scaledWidth, top + scaledHeight)
+            canvas.drawBitmap(source, null, imageBounds, Paint(Paint.FILTER_BITMAP_FLAG))
 
             val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = LinearGradient(
@@ -150,10 +164,24 @@ class CountdownWidget : AppWidgetProvider() {
                     val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
                     val bmp = decodeBackground(context, bgImage, opts)
                     if (bmp != null) {
+                        val focusX = prefs.getFloat(getWidgetKey(wid, KEY_BG_IMAGE_FOCUS_X), 0.5f).coerceIn(0f, 1f)
+                        val focusY = prefs.getFloat(getWidgetKey(wid, KEY_BG_IMAGE_FOCUS_Y), 0.5f).coerceIn(0f, 1f)
+                        val zoom = prefs.getFloat(getWidgetKey(wid, KEY_BG_IMAGE_ZOOM), 1f).coerceIn(1f, 3f)
+                        val widgetOptions = awm.getAppWidgetOptions(wid)
+                        val density = context.resources.displayMetrics.density
+                        val widgetWidth = widgetOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
+                            .takeIf { it > 0 } ?: widgetOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+                        val widgetHeight = widgetOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+                            .takeIf { it > 0 } ?: widgetOptions.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+                        val targetRatio = if (widgetWidth > 0 && widgetHeight > 0) {
+                            widgetWidth / widgetHeight.toFloat()
+                        } else {
+                            (bmp.width / density) / (bmp.height / density)
+                        }
                         views.setViewVisibility(R.id.widget_bg_image, android.view.View.VISIBLE)
                         views.setImageViewBitmap(
                         R.id.widget_bg_image,
-                        renderWidgetBackground(bmp, 384)
+                        renderWidgetBackground(bmp, 384, targetRatio, focusX, focusY, zoom)
                         )
                     } else throw Exception("null bitmap")
                 } catch (_: Exception) {

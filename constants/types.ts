@@ -5,8 +5,15 @@ export interface CountdownEvent {
   imageUri?: string;
   bgImageUri?: string;
   widgetImageUri?: string;
+  widgetImageCrop?: WidgetImageCrop;
   isPinned: boolean;
   createdAt: string;
+}
+
+export interface WidgetImageCrop {
+  focusX: number;
+  focusY: number;
+  zoom: number;
 }
 
 export type DayType = 'future' | 'past' | 'today';

@@ -31,7 +31,9 @@ export default function HomeScreen() {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
         const { syncAllWidgets } = require('../utils/widgetBridge');
-        syncAllWidgets(events);
+        syncAllWidgets(events).catch((error: unknown) => {
+          console.error('Failed to refresh home-screen widgets:', error);
+        });
       }
       appStateRef.current = nextState;
     });

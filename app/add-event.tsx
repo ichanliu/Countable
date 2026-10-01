@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -17,14 +18,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useEvents } from '../context/EventsContext';
-import { CountdownEvent, getDayDiff, generateId, formatDate, formatLocalDate, parseEventDate } from '../constants/types';
+import { CountdownEvent, getDayDiff, generateId, formatLocalDate, parseEventDate, WidgetImageCrop } from '../constants/types';
 import CalendarPicker from '../components/CalendarPicker';
-import { persistEventImage } from '../utils/imageStorage';
+import { deleteOrphanedImageFiles, findOrphanedImageUris, persistEventImage } from '../utils/imageStorage';
+import * as FileSystem from 'expo-file-system/legacy';
+import WidgetCropEditor from '../components/WidgetCropEditor';
 
 export default function AddEventScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ eventId?: string }>();
   const { events, addEvent, updateEvent, deleteEvent } = useEvents();
+  const currentEventsRef = useRef(events);
+  const stagedImageUrisRef = useRef(new Set<string>());
 
   const isEdit = !!params.eventId;
   const existingEvent = isEdit
@@ -44,12 +49,34 @@ export default function AddEventScreen() {
   const [widgetImageUri, setWidgetImageUri] = useState<string | undefined>(
     existingEvent?.widgetImageUri ?? existingEvent?.imageUri
   );
+  const [widgetImageCrop, setWidgetImageCrop] = useState<WidgetImageCrop>(
+    existingEvent?.widgetImageCrop ?? { focusX: 0.5, focusY: 0.5, zoom: 1 }
+  );
+  const [showWidgetCrop, setShowWidgetCrop] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [deleteState, setDeleteState] = useState<'idle' | 'confirm'>('idle');
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset delete state after 3 seconds
+  useEffect(() => {
+    currentEventsRef.current = events;
+  }, [events]);
+
+  useEffect(() => {
+    return () => {
+      const orphaned = findOrphanedImageUris(
+        [...stagedImageUrisRef.current],
+        currentEventsRef.current,
+        [],
+        FileSystem.documentDirectory
+      );
+      void deleteOrphanedImageFiles(orphaned).catch((error) => {
+        console.error('Failed to remove unused selected images:', error);
+      });
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (deleteTimerRef.current) {
@@ -81,18 +108,23 @@ export default function AddEventScreen() {
       ? [16, 9] as [number, number]
       : prefix === 'event-detail'
         ? [9, 16] as [number, number]
-        : [1, 1] as [number, number];
+        : undefined;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.8,
-      allowsEditing: true,
+      allowsEditing: prefix !== 'event-widget',
       ...(aspect ? { aspect } : {}),
     });
 
     if (!result.canceled && result.assets[0]) {
       try {
         const storedUri = await persistEventImage(result.assets[0].uri, prefix);
+        stagedImageUrisRef.current.add(storedUri);
         setImage(storedUri);
+        if (prefix === 'event-widget') {
+          setWidgetImageCrop({ focusX: 0.5, focusY: 0.5, zoom: 1 });
+          setShowWidgetCrop(true);
+        }
       } catch (error) {
         Alert.alert(
           'Image could not be saved',
@@ -117,13 +149,21 @@ export default function AddEventScreen() {
     setIsSaving(true);
     try {
       if (isEdit && existingEvent) {
-        await updateEvent(existingEvent.id, {
+        const updatedEvent = {
+          ...existingEvent,
           title: trimmed,
           targetDate: formatLocalDate(targetDate),
           imageUri,
           bgImageUri,
           widgetImageUri: widgetImageUri ?? '',
+          widgetImageCrop,
+        };
+        await updateEvent(existingEvent.id, {
+          ...updatedEvent,
         });
+        currentEventsRef.current = events.map((event) =>
+          event.id === existingEvent.id ? updatedEvent : event
+        );
       } else {
         const newEvent: CountdownEvent = {
           id: generateId(),
@@ -132,10 +172,12 @@ export default function AddEventScreen() {
           imageUri,
           bgImageUri,
           widgetImageUri: widgetImageUri ?? '',
+          widgetImageCrop,
           isPinned: false,
           createdAt: new Date().toISOString(),
         };
         await addEvent(newEvent);
+        currentEventsRef.current = [newEvent, ...events];
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -144,7 +186,7 @@ export default function AddEventScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [title, targetDate, imageUri, bgImageUri, widgetImageUri, isEdit, existingEvent, addEvent, updateEvent]);
+  }, [title, targetDate, imageUri, bgImageUri, widgetImageUri, widgetImageCrop, isEdit, existingEvent, addEvent, updateEvent]);
 
   const handleDeletePress = useCallback(() => {
     if (deleteState === 'idle') {
@@ -264,6 +306,12 @@ export default function AddEventScreen() {
             onPick={() => handlePickImage(setWidgetImageUri, 'event-widget')}
             onRemove={() => handleRemoveImage(setWidgetImageUri)}
           />
+          {widgetImageUri && (
+            <Pressable style={styles.cropButton} onPress={() => setShowWidgetCrop(true)}>
+              <Ionicons name="crop-outline" size={16} color={Colors.primary} />
+              <Text style={styles.cropButtonText}>Preview and adjust framing</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Delete button (Edit mode only) */}
@@ -297,6 +345,23 @@ export default function AddEventScreen() {
           </Pressable>
         )}
       </ScrollView>
+
+      <Modal visible={showWidgetCrop} transparent animationType="fade">
+        <View style={styles.cropOverlay}>
+          {widgetImageUri && (
+            <WidgetCropEditor
+              key={widgetImageUri}
+              uri={widgetImageUri}
+              initialCrop={widgetImageCrop}
+              onCancel={() => setShowWidgetCrop(false)}
+              onSave={(crop) => {
+                setWidgetImageCrop(crop);
+                setShowWidgetCrop(false);
+              }}
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -497,6 +562,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: InterWeights.semiBold,
     color: '#fff',
+  },
+  cropButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  cropButtonText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontFamily: InterWeights.medium,
+  },
+  cropOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.68)',
   },
   deleteBtn: {
     flexDirection: 'row',
