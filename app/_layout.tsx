@@ -16,6 +16,10 @@ import { Colors } from '../constants/theme';
 import { EventsProvider } from '../context/EventsContext';
 import { SettingsProvider } from '../context/SettingsContext';
 
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

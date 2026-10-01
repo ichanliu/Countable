@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -26,7 +27,7 @@ import { persistEventImage } from '../utils/imageStorage';
 export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const { events, updateEvent } = useEvents();
+  const { events, loading, updateEvent } = useEvents();
   const event = events.find((e) => e.id === eventId);
   const { height: screenHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
@@ -37,7 +38,7 @@ export default function EventDetailScreen() {
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    router.dismissTo('/');
   }, []);
 
   const handlePickImage = useCallback(async () => {
@@ -143,6 +144,14 @@ export default function EventDetailScreen() {
   }, [event]);
 
   if (!event) {
+    if (loading) {
+      return (
+        <View style={[styles.container, styles.loadingState]}>
+          <StatusBar style="light" />
+          <ActivityIndicator color={Colors.primary} />
+        </View>
+      );
+    }
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar style="light" />
@@ -205,9 +214,7 @@ export default function EventDetailScreen() {
         </View>
 
         {/* Page 2: Detail section */}
-        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: 20 }]}>
-          <View style={{ height: 20 }} />
-
+        <View style={[styles.bottomSection, { minHeight: pageHeight, paddingTop: pageHeight * 0.3 }]}>
           {dayType !== 'past' && (
             <View style={styles.ringContainer}>
               <View style={styles.progressBarWrap}>
@@ -310,6 +317,10 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingState: {
     justifyContent: 'center',
     alignItems: 'center',
   },
