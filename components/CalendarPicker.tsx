@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, InterWeights } from '../constants/theme';
@@ -36,6 +36,13 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
   const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(selectedDate.getMonth());
   const [showYearPicker, setShowYearPicker] = useState(false);
+  const selectedDateKey = `${selectedDate.getFullYear()}-${selectedDate.getMonth()}-${selectedDate.getDate()}`;
+
+  useEffect(() => {
+    const [year, month] = selectedDateKey.split('-').map(Number);
+    setViewYear(year);
+    setViewMonth(month);
+  }, [selectedDateKey]);
 
   const days = useMemo(() => getMonthDays(viewYear, viewMonth), [viewYear, viewMonth]);
 
@@ -137,7 +144,9 @@ export default function CalendarPicker({ selectedDate, onDateChange }: CalendarP
             const cellDate = new Date(viewYear, viewMonth, d);
             cellDate.setHours(0, 0, 0, 0);
             const isSelected =
-              cellDate.getTime() === selectedDate.getTime();
+              cellDate.getFullYear() === selectedDate.getFullYear() &&
+              cellDate.getMonth() === selectedDate.getMonth() &&
+              cellDate.getDate() === selectedDate.getDate();
             const isToday = cellDate.getTime() === today.getTime();
 
             return (

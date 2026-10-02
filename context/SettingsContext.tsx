@@ -7,6 +7,7 @@ const SETTINGS_KEY = '@countable_settings';
 export interface AppSettings {
   accentColor: string;
   customImages: string[];
+  homeBackgroundUri?: string;
   reminderEnabled: boolean;
   reminderMessage: string;
 }
@@ -74,6 +75,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const newSettings = {
       ...settings,
       customImages: settings.customImages.filter((u) => u !== uri),
+      homeBackgroundUri: settings.homeBackgroundUri === uri
+        ? undefined
+        : settings.homeBackgroundUri,
     };
     setSettings(newSettings);
     await save(newSettings);

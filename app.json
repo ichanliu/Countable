@@ -10,9 +10,9 @@
     "scheme": "countdowns",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#080C14"
+      "backgroundColor": "#72AADD"
     },
     "ios": {
       "supportsTablet": false,
@@ -23,7 +23,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#080C14"
+        "backgroundColor": "#72AADD"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [

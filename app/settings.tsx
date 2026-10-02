@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,17 +12,32 @@ import {
   FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useSettings } from '../context/SettingsContext';
 import { useEvents } from '../context/EventsContext';
+import { formatDate } from '../constants/types';
+import {
+  bindWidget,
+  getWidgetIds,
+  getWidgetEventId,
+  isWidgetBindingSet,
+  syncWidget,
+} from '../utils/widgetBridge';
+import {
+  deleteOrphanedImageFiles,
+  findOrphanedImageUris,
+  getSettingsImageReferences,
+  persistEventImage,
+} from '../utils/imageStorage';
+import { isDefaultWidgetBinding } from '../utils/widgetAssignments';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -30,33 +45,54 @@ export default function SettingsScreen() {
   const { exportEvents, importEvents, events } = useEvents();
   const [widgetIds, setWidgetIds] = useState<number[]>([]);
   const [widgetBindings, setWidgetBindings] = useState<Record<number, string>>({});
+  const [widgetBindingSet, setWidgetBindingSet] = useState<Record<number, boolean>>({});
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [pickingWidgetId, setPickingWidgetId] = useState<number | null>(null);
 
-  const handleBindWidget = useCallback((widgetId: number, eventId: string) => {
-    const { bindWidget, syncWidget } = require('../utils/widgetBridge');
-    bindWidget(widgetId, eventId);
-    const event = events.find((e) => e.id === eventId);
-    syncWidget(event || null, widgetId);
-    setWidgetBindings((prev) => ({ ...prev, [widgetId]: eventId }));
-    setShowWidgetPicker(false);
-    setPickingWidgetId(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const handleBindWidget = useCallback(async (widgetId: number, eventId: string) => {
+    try {
+      await bindWidget(widgetId, eventId);
+      const event = events.find((e) => e.id === eventId);
+      await syncWidget(event || null, widgetId);
+      setWidgetBindings((prev) => ({ ...prev, [widgetId]: eventId }));
+      setWidgetBindingSet((prev) => ({ ...prev, [widgetId]: true }));
+      setShowWidgetPicker(false);
+      setPickingWidgetId(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Alert.alert(
+        'Widget could not be updated',
+        error instanceof Error ? error.message : 'Please try again.'
+      );
+    }
   }, [events]);
 
-  // Fetch widget info on mount
-  useEffect(() => {
+  // Refresh widget IDs and bindings whenever Settings comes into focus.
+  useFocusEffect(useCallback(() => {
+    let active = true;
     (async () => {
-      const { getWidgetIds, getWidgetEventId } = require('../utils/widgetBridge');
-      const ids = await getWidgetIds();
-      setWidgetIds(ids);
-      const bindings: Record<number, string> = {};
-      for (const id of ids) {
-        bindings[id] = await getWidgetEventId(id);
+      try {
+        const ids = await getWidgetIds();
+        if (!active) return;
+        setWidgetIds(ids);
+        const bindings: Record<number, string> = {};
+        const bindingStates: Record<number, boolean> = {};
+        for (const id of ids) {
+          bindings[id] = await getWidgetEventId(id);
+          bindingStates[id] = await isWidgetBindingSet(id);
+        }
+        if (active) {
+          setWidgetBindings(bindings);
+          setWidgetBindingSet(bindingStates);
+        }
+      } catch (error) {
+        console.error('Failed to load widget bindings:', error);
       }
-      setWidgetBindings(bindings);
     })();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, []));
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -69,15 +105,41 @@ export default function SettingsScreen() {
       Alert.alert('Permission required', 'Allow access to your photo library.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-      allowsEditing: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      await addImage(result.assets[0].uri);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const uri = await persistEventImage(result.assets[0].uri, 'custom-image');
+      await addImage(uri);
+    } catch (error) {
+      Alert.alert(
+        'Image could not be saved',
+        error instanceof Error ? error.message : 'Please try selecting the image again.'
+      );
     }
   }, [addImage]);
+
+  const handleRemoveImage = useCallback(async (uri: string) => {
+    try {
+      await removeImage(uri);
+      const remainingSettingsUris = await getSettingsImageReferences();
+      const orphaned = findOrphanedImageUris(
+        [uri],
+        events,
+        remainingSettingsUris,
+        FileSystem.documentDirectory
+      );
+      await deleteOrphanedImageFiles(orphaned);
+    } catch (error) {
+      Alert.alert(
+        'Image could not be removed',
+        error instanceof Error ? error.message : 'Please try again.'
+      );
+    }
+  }, [events, removeImage]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -162,14 +224,51 @@ export default function SettingsScreen() {
         {/* Custom Images Section */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>CUSTOM IMAGES</Text>
+          <View style={styles.backgroundHeader}>
+            <View style={styles.backgroundDescription}>
+              <Text style={styles.backgroundTitle}>Home background</Text>
+              <Text style={styles.infoText}>
+                {settings.homeBackgroundUri
+                  ? 'Custom background selected'
+                  : 'Tap a photo below or add one'}
+              </Text>
+            </View>
+            {settings.homeBackgroundUri && (
+              <Pressable
+                accessibilityLabel="Clear home background"
+                onPress={() => void updateSettings({ homeBackgroundUri: undefined })}
+                style={styles.clearBackgroundBtn}
+              >
+                <Text style={styles.clearBackgroundText}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
           {settings.customImages.length > 0 && (
             <View style={styles.imageGrid}>
               {settings.customImages.map((uri, i) => (
-                <View key={i} style={styles.imageItem}>
-                  <Image source={{ uri }} style={styles.thumbImage} />
+                <View
+                  key={`${uri}-${i}`}
+                  style={[
+                    styles.imageItem,
+                    settings.homeBackgroundUri === uri && styles.imageItemSelected,
+                  ]}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set image ${i + 1} as home background`}
+                    onPress={() => void updateSettings({ homeBackgroundUri: uri })}
+                  >
+                    <Image source={{ uri }} style={styles.thumbImage} />
+                    {settings.homeBackgroundUri === uri && (
+                      <View style={styles.selectedImageMark}>
+                        <Ionicons name="checkmark" size={13} color="#fff" />
+                      </View>
+                    )}
+                  </Pressable>
                   <Pressable
                     style={styles.removeImageBtn}
-                    onPress={() => removeImage(uri)}
+                    accessibilityLabel={`Remove custom image ${i + 1}`}
+                    onPress={() => void handleRemoveImage(uri)}
                   >
                     <Ionicons name="close-circle" size={22} color={Colors.destructive} />
                   </Pressable>
@@ -207,24 +306,41 @@ export default function SettingsScreen() {
             {widgetIds.map((id) => {
               const boundEventId = widgetBindings[id] || '';
               const boundEvent = events.find((e) => e.id === boundEventId);
+              const defaultBinding = isDefaultWidgetBinding(widgetBindingSet[id] ?? false, boundEventId);
+              const displayedEvent = boundEvent ?? (
+                defaultBinding ? events.find((event) => event.isPinned) : undefined
+              );
               return (
                 <View key={id} style={styles.widgetRow}>
-                  <View>
-                    <Text style={styles.widgetIdText}>Widget #{id}</Text>
+                  <View style={styles.widgetInfo}>
+                    <Text style={styles.widgetIdText}>Home-screen widget #{id}</Text>
                     <Text style={styles.widgetEventText}>
-                      {boundEvent ? boundEvent.title : 'No event bound'}
+                      {displayedEvent
+                        ? `${displayedEvent.title} · ${formatDate(displayedEvent.targetDate)}${defaultBinding ? ' · default pinned event' : ''}`
+                        : widgetBindingSet[id] ? 'Unbound · displays no event' : 'Not linked to an event'}
                     </Text>
                   </View>
-                  <Pressable
-                    style={styles.widgetBindBtn}
-                    onPress={() => {
-                      setPickingWidgetId(id);
-                      setShowWidgetPicker(true);
-                    }}
-                  >
-                    <Ionicons name="link-outline" size={14} color={Colors.primary} />
-                    <Text style={styles.widgetBindText}>Bind</Text>
-                  </Pressable>
+                  <View style={styles.widgetActions}>
+                    <Pressable
+                      style={styles.widgetBindBtn}
+                      onPress={() => {
+                        setPickingWidgetId(id);
+                        setShowWidgetPicker(true);
+                      }}
+                    >
+                      <Ionicons name="link-outline" size={14} color={Colors.primary} />
+                      <Text style={styles.widgetBindText}>{boundEvent ? 'Change' : 'Choose'}</Text>
+                    </Pressable>
+                    {boundEvent && (
+                      <Pressable
+                        accessibilityLabel={`Unbind widget ${id}`}
+                        style={styles.widgetUnbindBtn}
+                        onPress={() => void handleBindWidget(id, '')}
+                      >
+                        <Ionicons name="unlink-outline" size={14} color={Colors.destructive} />
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               );
             })}
@@ -243,7 +359,8 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowWidgetPicker(false)} />
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Bind to event</Text>
+            <Text style={styles.modalTitle}>Choose an event</Text>
+            <Text style={styles.modalHint}>This changes only the selected home-screen widget.</Text>
             {events.length === 0 ? (
               <Text style={styles.modalEmpty}>No events yet</Text>
             ) : (
@@ -252,11 +369,15 @@ export default function SettingsScreen() {
                   <Pressable
                     key={ev.id}
                     style={styles.modalItem}
-                    onPress={() => pickingWidgetId !== null && handleBindWidget(pickingWidgetId, ev.id)}
+                    onPress={() => {
+                      if (pickingWidgetId !== null) {
+                        void handleBindWidget(pickingWidgetId, ev.id);
+                      }
+                    }}
                   >
                     <View>
                       <Text style={styles.modalItemTitle}>{ev.title}</Text>
-                      <Text style={styles.modalItemDate}>{new Date(ev.targetDate).toLocaleDateString()}</Text>
+                      <Text style={styles.modalItemDate}>{formatDate(ev.targetDate)}</Text>
                     </View>
                     {widgetBindings[pickingWidgetId || 0] === ev.id && (
                       <Ionicons name="checkmark" size={18} color={Colors.primary} />
@@ -264,6 +385,17 @@ export default function SettingsScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
+            )}
+            {!!widgetBindingSet[pickingWidgetId || 0] && !!widgetBindings[pickingWidgetId || 0] && (
+              <Pressable
+                style={styles.unbindModalItem}
+                onPress={() => {
+                  if (pickingWidgetId !== null) void handleBindWidget(pickingWidgetId, '');
+                }}
+              >
+                <Ionicons name="unlink-outline" size={16} color={Colors.destructive} />
+                <Text style={styles.unbindModalText}>Unbind this widget (show no event)</Text>
+              </Pressable>
             )}
             <Pressable style={styles.modalCloseBtn} onPress={() => setShowWidgetPicker(false)}>
               <Text style={styles.modalCloseText}>Close</Text>
@@ -332,16 +464,60 @@ const styles = StyleSheet.create({
   },
   imageItem: {
     position: 'relative',
+    borderRadius: Radius.badge,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  imageItemSelected: {
+    borderColor: Colors.primary,
   },
   thumbImage: {
     width: 80,
     height: 80,
     borderRadius: Radius.badge,
   },
+  selectedImageMark: {
+    position: 'absolute',
+    left: 5,
+    bottom: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removeImageBtn: {
     position: 'absolute',
     top: -4,
     right: -4,
+  },
+  backgroundHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  backgroundDescription: {
+    flex: 1,
+    gap: 2,
+  },
+  backgroundTitle: {
+    fontSize: 14,
+    fontFamily: InterWeights.medium,
+    color: Colors.foreground,
+  },
+  clearBackgroundBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  clearBackgroundText: {
+    fontSize: 12,
+    fontFamily: InterWeights.medium,
+    color: Colors.primary,
   },
   addImageBtn: {
     flexDirection: 'row',
@@ -388,6 +564,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
+  widgetActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   widgetIdText: {
     fontSize: 12,
     fontFamily: InterWeights.semiBold,
@@ -398,6 +579,11 @@ const styles = StyleSheet.create({
     fontFamily: InterWeights.medium,
     color: Colors.foreground,
     marginTop: 2,
+    flexShrink: 1,
+  },
+  widgetInfo: {
+    flex: 1,
+    marginRight: 8,
   },
   widgetBindBtn: {
     flexDirection: 'row',
@@ -436,6 +622,13 @@ const styles = StyleSheet.create({
     color: Colors.foreground,
     marginBottom: 12,
   },
+  modalHint: {
+    fontSize: 12,
+    fontFamily: InterWeights.regular,
+    color: Colors.mutedForeground,
+    marginTop: -6,
+    marginBottom: 8,
+  },
   modalEmpty: {
     fontSize: 14,
     fontFamily: InterWeights.regular,
@@ -464,6 +657,25 @@ const styles = StyleSheet.create({
     fontFamily: InterWeights.regular,
     color: Colors.mutedForeground,
     marginTop: 2,
+  },
+  unbindModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  unbindModalText: {
+    fontSize: 13,
+    fontFamily: InterWeights.medium,
+    color: Colors.destructive,
+  },
+  widgetUnbindBtn: {
+    padding: 7,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   modalCloseBtn: {
     alignItems: 'center',

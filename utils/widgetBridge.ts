@@ -1,23 +1,28 @@
 import { NativeModules, Platform } from 'react-native';
-import { getDayType, getDayDiff } from '../constants/types';
+import { formatLocalDate, getDayType, getDayDiff, parseEventDate } from '../constants/types';
 import type { CountdownEvent } from '../constants/types';
+import { resolveWidgetEvent } from './widgetAssignments';
 
 const WidgetModule = Platform.OS === 'android'
   ? NativeModules.CountdownWidgetModule
   : null;
 
-// Sync a single event to ALL active widgets (or to a specific widget if widgetId provided)
-export function syncWidget(event: CountdownEvent | null, widgetId?: number): void {
-  if (Platform.OS !== 'android' || !WidgetModule) return;
+// Sync an event to one widget instance, or all instances when no ID is supplied.
+export async function syncWidget(event: CountdownEvent | null, widgetId?: number): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  if (!WidgetModule) throw new Error('Countdown widget native module is unavailable.');
 
   try {
     if (!event) {
-      WidgetModule.updateWidget({
+      await WidgetModule.updateWidget({
         title: '',
         count: '--',
         label: 'PIN AN EVENT',
         color: '#7A8A9E',
         bgImage: '',
+        bgImageFocusX: 0.5,
+        bgImageFocusY: 0.5,
+        bgImageZoom: 1,
         targetDate: '',
         targetWidgetId: widgetId ?? -1,
       });
@@ -50,24 +55,31 @@ export function syncWidget(event: CountdownEvent | null, widgetId?: number): voi
         break;
     }
 
-    WidgetModule.updateWidget({
+    await WidgetModule.updateWidget({
       title: event.title,
       count,
       label,
       color,
       eventId: event.id,
-      bgImage: event.widgetImageUri || event.imageUri || '',
-      targetDate: event.targetDate,
+      bgImage: event.widgetImageUri !== undefined
+        ? event.widgetImageUri
+        : event.imageUri || '',
+      bgImageFocusX: event.widgetImageCrop?.focusX ?? 0.5,
+      bgImageFocusY: event.widgetImageCrop?.focusY ?? 0.5,
+      bgImageZoom: event.widgetImageCrop?.zoom ?? 1,
+      targetDate: formatLocalDate(parseEventDate(event.targetDate)),
       targetWidgetId: widgetId ?? -1,
     });
   } catch (error) {
     console.warn('Widget sync failed:', error);
+    throw error;
   }
 }
 
 // Get all active widget instance IDs
 export async function getWidgetIds(): Promise<number[]> {
-  if (Platform.OS !== 'android' || !WidgetModule) return [];
+  if (Platform.OS !== 'android') return [];
+  if (!WidgetModule) throw new Error('Countdown widget native module is unavailable.');
   try {
     const arr = await WidgetModule.getActiveWidgetIds();
     if (arr && typeof arr.forEach === 'function') {
@@ -77,52 +89,52 @@ export async function getWidgetIds(): Promise<number[]> {
     }
     return [];
   } catch {
-    return [];
+    throw new Error('Could not retrieve active countdown widgets.');
   }
 }
 
 // Bind a widget instance to a specific event
 export async function bindWidget(widgetId: number, eventId: string): Promise<void> {
-  if (Platform.OS !== 'android' || !WidgetModule) return;
+  if (Platform.OS !== 'android') return;
+  if (!WidgetModule) throw new Error('Countdown widget native module is unavailable.');
   try {
     await WidgetModule.bindWidget(widgetId, eventId);
   } catch (e) {
     console.warn('Widget bind failed:', e);
+    throw e;
+  }
+}
+
+export async function isWidgetBindingSet(widgetId: number): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  if (!WidgetModule) throw new Error('Countdown widget native module is unavailable.');
+  try {
+    return !!(await WidgetModule.isWidgetBindingSet(widgetId));
+  } catch (e) {
+    console.warn('Widget binding lookup failed:', e);
+    throw e;
   }
 }
 
 // Get which event a widget is bound to
 export async function getWidgetEventId(widgetId: number): Promise<string> {
-  if (Platform.OS !== 'android' || !WidgetModule) return '';
+  if (Platform.OS !== 'android') return '';
+  if (!WidgetModule) throw new Error('Countdown widget native module is unavailable.');
   try {
     return await WidgetModule.getWidgetEventId(widgetId) || '';
   } catch {
-    return '';
+    throw new Error('Could not retrieve the event bound to a countdown widget.');
   }
 }
 
 // Sync all active widgets with their bound events
 export async function syncAllWidgets(events: CountdownEvent[]): Promise<void> {
-  if (Platform.OS !== 'android' || !WidgetModule) return;
-  try {
-    const ids = await getWidgetIds();
-    for (const widgetId of ids) {
-      const boundEventId = await getWidgetEventId(widgetId);
-      if (boundEventId) {
-        const event = events.find((e) => e.id === boundEventId);
-        if (event) {
-          syncWidget(event, widgetId);
-        } else {
-          // Event was deleted - clear this widget
-          syncWidget(null, widgetId);
-        }
-      } else {
-        // No event bound - sync the first pinned event as default
-        const pinned = events.find((e) => e.isPinned);
-        syncWidget(pinned || null, widgetId);
-      }
-    }
-  } catch (e) {
-    console.warn('syncAllWidgets failed:', e);
+  if (Platform.OS !== 'android') return;
+  if (!WidgetModule) throw new Error('Countdown widget native module is unavailable.');
+  const ids = await getWidgetIds();
+  for (const widgetId of ids) {
+    const boundEventId = await getWidgetEventId(widgetId);
+    const bindingSet = await isWidgetBindingSet(widgetId);
+    await syncWidget(resolveWidgetEvent(events, bindingSet, boundEventId), widgetId);
   }
 }
