@@ -24,9 +24,19 @@ import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useSettings } from '../context/SettingsContext';
 import { useEvents } from '../context/EventsContext';
 import { formatDate } from '../constants/types';
-import { bindWidget, getWidgetIds, getWidgetEventId, isWidgetBindingSet, syncWidget } from '../utils/widgetBridge';
-import { persistEventImage, deleteOrphanedImageFiles } from '../utils/imageStorage';
-import { findOrphanedImageUris } from '../utils/imageReferences';
+import {
+  bindWidget,
+  getWidgetIds,
+  getWidgetEventId,
+  isWidgetBindingSet,
+  syncWidget,
+} from '../utils/widgetBridge';
+import {
+  deleteOrphanedImageFiles,
+  findOrphanedImageUris,
+  getSettingsImageReferences,
+  persistEventImage,
+} from '../utils/imageStorage';
 import { isDefaultWidgetBinding } from '../utils/widgetAssignments';
 
 export default function SettingsScreen() {
@@ -115,7 +125,7 @@ export default function SettingsScreen() {
   const handleRemoveImage = useCallback(async (uri: string) => {
     try {
       await removeImage(uri);
-      const remainingSettingsUris = settings.customImages.filter((imageUri) => imageUri !== uri);
+      const remainingSettingsUris = await getSettingsImageReferences();
       const orphaned = findOrphanedImageUris(
         [uri],
         events,
@@ -129,7 +139,7 @@ export default function SettingsScreen() {
         error instanceof Error ? error.message : 'Please try again.'
       );
     }
-  }, [events, removeImage, settings.customImages]);
+  }, [events, removeImage]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -214,13 +224,50 @@ export default function SettingsScreen() {
         {/* Custom Images Section */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>CUSTOM IMAGES</Text>
+          <View style={styles.backgroundHeader}>
+            <View style={styles.backgroundDescription}>
+              <Text style={styles.backgroundTitle}>Home background</Text>
+              <Text style={styles.infoText}>
+                {settings.homeBackgroundUri
+                  ? 'Custom background selected'
+                  : 'Tap a photo below or add one'}
+              </Text>
+            </View>
+            {settings.homeBackgroundUri && (
+              <Pressable
+                accessibilityLabel="Clear home background"
+                onPress={() => void updateSettings({ homeBackgroundUri: undefined })}
+                style={styles.clearBackgroundBtn}
+              >
+                <Text style={styles.clearBackgroundText}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
           {settings.customImages.length > 0 && (
             <View style={styles.imageGrid}>
               {settings.customImages.map((uri, i) => (
-                <View key={i} style={styles.imageItem}>
-                  <Image source={{ uri }} style={styles.thumbImage} />
+                <View
+                  key={`${uri}-${i}`}
+                  style={[
+                    styles.imageItem,
+                    settings.homeBackgroundUri === uri && styles.imageItemSelected,
+                  ]}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set image ${i + 1} as home background`}
+                    onPress={() => void updateSettings({ homeBackgroundUri: uri })}
+                  >
+                    <Image source={{ uri }} style={styles.thumbImage} />
+                    {settings.homeBackgroundUri === uri && (
+                      <View style={styles.selectedImageMark}>
+                        <Ionicons name="checkmark" size={13} color="#fff" />
+                      </View>
+                    )}
+                  </Pressable>
                   <Pressable
                     style={styles.removeImageBtn}
+                    accessibilityLabel={`Remove custom image ${i + 1}`}
                     onPress={() => void handleRemoveImage(uri)}
                   >
                     <Ionicons name="close-circle" size={22} color={Colors.destructive} />
@@ -417,16 +464,60 @@ const styles = StyleSheet.create({
   },
   imageItem: {
     position: 'relative',
+    borderRadius: Radius.badge,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  imageItemSelected: {
+    borderColor: Colors.primary,
   },
   thumbImage: {
     width: 80,
     height: 80,
     borderRadius: Radius.badge,
   },
+  selectedImageMark: {
+    position: 'absolute',
+    left: 5,
+    bottom: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removeImageBtn: {
     position: 'absolute',
     top: -4,
     right: -4,
+  },
+  backgroundHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  backgroundDescription: {
+    flex: 1,
+    gap: 2,
+  },
+  backgroundTitle: {
+    fontSize: 14,
+    fontFamily: InterWeights.medium,
+    color: Colors.foreground,
+  },
+  clearBackgroundBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  clearBackgroundText: {
+    fontSize: 12,
+    fontFamily: InterWeights.medium,
+    color: Colors.primary,
   },
   addImageBtn: {
     flexDirection: 'row',

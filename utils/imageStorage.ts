@@ -1,7 +1,11 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildPersistentImageUri, findOrphanedImageUris } from './imageReferences';
+import {
+  buildPersistentImageUri,
+  findOrphanedImageUris,
+  getSettingsImageUris,
+} from './imageReferences';
 
 export { findOrphanedImageUris } from './imageReferences';
 
@@ -32,9 +36,5 @@ export async function getSettingsImageReferences(): Promise<string[]> {
   const raw = await AsyncStorage.getItem('@countable_settings');
   if (!raw) return [];
   const settings: unknown = JSON.parse(raw);
-  if (!settings || typeof settings !== 'object' || !('customImages' in settings)) return [];
-  const images = (settings as { customImages?: unknown }).customImages;
-  return Array.isArray(images)
-    ? images.filter((uri): uri is string => typeof uri === 'string')
-    : [];
+  return getSettingsImageUris(settings);
 }

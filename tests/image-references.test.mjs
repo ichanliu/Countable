@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPersistentImageUri, findOrphanedImageUris } from '../utils/imageReferences.ts';
+import {
+  buildPersistentImageUri,
+  findOrphanedImageUris,
+  getSettingsImageUris,
+} from '../utils/imageReferences.ts';
 
 const directory = 'file:///app/documents/';
 
@@ -53,4 +57,25 @@ test('image cleanup ignores paths outside app-owned persistent storage', () => {
     `${directory}unmanaged.jpg`,
   ];
   assert.deepEqual(findOrphanedImageUris(candidates, [], [], directory), []);
+});
+
+test('active home background remains referenced even if it is not in the custom image library', () => {
+  const activeBackground = `${directory}custom-image_background.jpg`;
+  const unused = `${directory}custom-image_unused.jpg`;
+  const references = getSettingsImageUris({
+    customImages: [],
+    homeBackgroundUri: activeBackground,
+  });
+
+  assert.deepEqual(references, [activeBackground]);
+  assert.deepEqual(
+    findOrphanedImageUris([activeBackground, unused], [], references, directory),
+    [unused]
+  );
+});
+
+test('settings without a selected home background retain the existing image-library behavior', () => {
+  const libraryImage = `${directory}custom-image_library.jpg`;
+  assert.deepEqual(getSettingsImageUris({ customImages: [libraryImage] }), [libraryImage]);
+  assert.deepEqual(getSettingsImageUris(undefined), []);
 });

@@ -11,6 +11,18 @@ export function buildPersistentImageUri(
   return `${directory}${name}_${suffix}.${extension}`;
 }
 
+export function getSettingsImageUris(settings: unknown): string[] {
+  if (!settings || typeof settings !== 'object') return [];
+  const value = settings as { customImages?: unknown; homeBackgroundUri?: unknown };
+  const customImages = Array.isArray(value.customImages)
+    ? value.customImages.filter((uri): uri is string => typeof uri === 'string')
+    : [];
+  const homeBackground = typeof value.homeBackgroundUri === 'string'
+    ? [value.homeBackgroundUri]
+    : [];
+  return [...new Set([...customImages, ...homeBackground])];
+}
+
 export function findOrphanedImageUris(
   candidates: string[],
   events: CountdownEvent[],

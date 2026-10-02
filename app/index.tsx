@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   View,
   Text,
+  Image,
   FlatList,
   Pressable,
   StyleSheet,
@@ -15,12 +16,14 @@ import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import { Colors, Radius, InterWeights } from '../constants/theme';
 import { useEvents } from '../context/EventsContext';
+import { useSettings } from '../context/SettingsContext';
 import { CountdownEvent } from '../constants/types';
 import EventCard from '../components/EventCard';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { events, loading, togglePin, reorderEvents } = useEvents();
+  const { settings } = useSettings();
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => Number(b.isPinned) - Number(a.isPinned));
   }, [events]);
@@ -113,10 +116,21 @@ export default function HomeScreen() {
   );
 
   const keyExtractor = useCallback((item: CountdownEvent) => item.id, []);
+  const homeBackground = settings.homeBackgroundUri ? (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Image
+        source={{ uri: settings.homeBackgroundUri }}
+        resizeMode="cover"
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[StyleSheet.absoluteFill, styles.homeBackgroundScrim]} />
+    </View>
+  ) : null;
 
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: safeTop }]}>
+        {homeBackground}
         <StatusBar style="light" />
       </View>
     );
@@ -124,6 +138,7 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: safeTop }]}>
+      {homeBackground}
       <StatusBar style="light" />
 
       {/* Header */}
@@ -205,6 +220,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  homeBackgroundScrim: {
+    backgroundColor: 'rgba(8,12,20,0.66)',
   },
   header: {
     flexDirection: 'row',
